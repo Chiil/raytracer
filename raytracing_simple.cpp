@@ -73,8 +73,8 @@ void run_ray_tracer()
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 8;
+    const int n_photons = 256*1024*1024;
+    const int n_photon_batch = 1<<16;
     const int n_photon_loop = n_photons / n_photon_batch;
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -86,7 +86,7 @@ void run_ray_tracer()
     #pragma omp parallel for
     for (int n=0; n<n_photon_batch; ++n)
     {
-        static thread_local std::mt19937_64 mt(rd());
+        thread_local std::mt19937_64 mt(rd());
         std::uniform_real_distribution<double> dist(0., 1.);
 
         reset_photon(
@@ -108,7 +108,7 @@ void run_ray_tracer()
         #pragma omp parallel for
         for (int n=0; n<n_photon_batch; ++n)
         {
-            static thread_local std::mt19937_64 mt(rd());
+            thread_local std::mt19937_64 mt(rd());
             std::uniform_real_distribution<double> dist(0., 1.);
 
             while (true)
@@ -176,7 +176,7 @@ void run_ray_tracer()
         #pragma omp parallel for
         for (int n=0; n<n_photon_batch; ++n)
         {
-            static thread_local std::mt19937_64 mt(rd());
+            thread_local std::mt19937_64 mt(rd());
             std::uniform_real_distribution<double> dist(0., 1.);
 
             const double event = dist(mt);
