@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 itot = 128
 ktot = 128
 
-toa_down = np.fromfile('input.bin', dtype=np.uint32)
-surface_down = np.fromfile('surface.bin', dtype=np.uint32)
-toa_up = np.fromfile('toa.bin', dtype=np.uint32)
+toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
+toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
+surface_down = np.fromfile('surface_down.bin', dtype=np.uint32)
 atmos = np.fromfile('atmos.bin', dtype=np.uint32).reshape((ktot, itot))
 
 print('in: ', toa_down.sum())
