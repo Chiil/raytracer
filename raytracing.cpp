@@ -1,3 +1,6 @@
+#include <fstream>
+#include <iostream>
+
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
 
@@ -5,8 +8,8 @@
 struct Photon;
 
 using Photon_array = Kokkos::View<Photon*, Kokkos::LayoutRight, Kokkos::HostSpace>;
-using Array_1d = Kokkos::View<unsigned*, Kokkos::LayoutRight, Kokkos::HostSpace>;
-using Array_2d = Kokkos::View<unsigned**, Kokkos::LayoutRight, Kokkos::HostSpace>;
+using Array_1d = Kokkos::View<unsigned int*, Kokkos::LayoutRight, Kokkos::HostSpace>;
+using Array_2d = Kokkos::View<unsigned int**, Kokkos::LayoutRight, Kokkos::HostSpace>;
 
 
 struct Vector
@@ -90,46 +93,55 @@ struct Transport_photons
     {
         auto rand_gen = rand_pool.get_state();
 
-        const double dn = sample_tau(rand_gen.drand(0., 1.)) / k_ext;
-        double dx = photons(n).direction.x * dn;
-        double dz = photons(n).direction.z * dn;
-
-        bool surface_exit = false;
-        bool toa_exit = false;
-
-        if ((photons(n).position.z + dz) <= 0.)
+        while (true)
         {
-            const double fac = std::abs(photons(n).position.z / dz);
-            dx *= fac;
-            dz *= fac;
+            const double dn = sample_tau(rand_gen.drand(0., 1.)) / k_ext;
+            double dx = photons(n).direction.x * dn;
+            double dz = photons(n).direction.z * dn;
 
-            surface_exit = true;
-        }
-        else if ((photons(n).position.z + dz) >= z_size)
-        {
-            const double fac = std::abs((z_size - photons(n).position.z) / dz);
-            dx *= fac;
-            dz *= fac;
+            bool surface_exit = false;
+            bool toa_exit = false;
 
-            toa_exit = true;
-        }
+            if ((photons(n).position.z + dz) <= 0.)
+            {
+                const double fac = std::abs(photons(n).position.z / dz);
+                dx *= fac;
+                dz *= fac;
 
-        photons(n).position.x += dx;
-        photons(n).position.z += dz;
+                surface_exit = true;
+            }
+            else if ((photons(n).position.z + dz) >= z_size)
+            {
+                const double fac = std::abs((z_size - photons(n).position.z) / dz);
+                dx *= fac;
+                dz *= fac;
 
-        // Cyclic boundary condition in x.
-        photons(n).position.x = std::fmod(photons(n).position.x, x_size);
-        if (photons(n).position.x < 0.)
-            photons(n).position.x += x_size;
+                toa_exit = true;
+            }
 
-        if (surface_exit || toa_exit)
-        {
-            const int i = photons(n).position.x / dx_grid;
+            photons(n).position.x += dx;
+            photons(n).position.z += dz;
 
-            if (surface_exit)
-                surface_count(i) += 1;
+            // Cyclic boundary condition in x.
+            photons(n).position.x = std::fmod(photons(n).position.x, x_size);
+            if (photons(n).position.x < 0.)
+                photons(n).position.x += x_size;
+
+            if (surface_exit || toa_exit)
+            {
+                const int i = photons(n).position.x / dx_grid;
+
+                if (surface_exit)
+                    surface_count(i) += 1;
+                else
+                    toa_count(i) += 1;
+
+                photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
+            }
             else
-                toa_count(i) += 1;
+            {
+                break;
+            }
         }
 
         rand_pool.free_state(rand_gen);
@@ -216,12 +228,6 @@ void run_ray_tracer()
                 photons, rand_pool,
                 x_size, z_size, zenith_angle));
 
-    std::cout << photons(0).position.x << ", ";
-    std::cout << photons(0).position.z << ", ";
-    std::cout << photons(0).direction.x << ", ";
-    std::cout << photons(0).direction.z << std::endl;
-    std::cout << "===" << std::endl;
-
     for (int n=0; n<100; ++n)
     {
         Kokkos::parallel_for(
@@ -241,24 +247,41 @@ void run_ray_tracer()
                     photons, atmos_count,
                     rand_pool,
                     ssa, dx, x_size, z_size, zenith_angle));
-
-        std::cout << photons(0).position.x << ", ";
-        std::cout << photons(0).position.z << ", ";
-        std::cout << photons(0).direction.x << ", ";
-        std::cout << photons(0).direction.z << std::endl;
-        std::cout << "=== (" << n << ") ===" << std::endl;
     }
+
+    double surface_sum = 0.;
+    for (int i=0; i<itot; ++i)
+    {
+        std::cout << "surface: (" << i << ") " << surface_count(i) << std::endl;
+        surface_sum += surface_count(i);
+    }
+    std::cout << "surface sum: " << surface_sum / itot << std::endl;
+
+    double toa_sum = 0.;
+    for (int i=0; i<itot; ++i)
+    {
+        std::cout << "toa: (" << i << ") " << toa_count(i) << std::endl;
+        toa_sum += toa_count(i);
+    }
+    std::cout << "toa sum: " << toa_sum / itot << std::endl;
 
     /*
-    std::ofstream binary_file("at_kokkos_cpu.bin", std::ios::out | std::ios::trunc | std::ios::binary);
-
-    if (binary_file)
-        binary_file.write(reinterpret_cast<const char*>(at_cpu.data()), ncells*sizeof(double));
-    else
+    auto save_binary = [](const std::string& name, void* ptr, const int size)
     {
-        std::string error = "Cannot write file \"at_cuda.bin\"";
-        throw std::runtime_error(error);
-    }
+        std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
+
+        if (binary_file)
+            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(unsigned int));
+        else
+        {
+            std::string error = "Cannot write file \"" + name + ".bin\"";
+            throw std::runtime_error(error);
+        }
+    };
+
+    save_binary("surface", surface_count.data(), itot);
+    save_binary("toa", toa_count.data(), itot);
+    save_binary("atmos", atmos_count.data(), itot*ktot);
     */
 }
 
