@@ -249,22 +249,6 @@ void run_ray_tracer()
                     ssa, dx, x_size, z_size, zenith_angle));
     }
 
-    double surface_sum = 0.;
-    for (int i=0; i<itot; ++i)
-    {
-        std::cout << "surface: (" << i << ") " << surface_count(i) << std::endl;
-        surface_sum += surface_count(i);
-    }
-    std::cout << "surface sum: " << surface_sum / itot << std::endl;
-
-    double toa_sum = 0.;
-    for (int i=0; i<itot; ++i)
-    {
-        std::cout << "toa: (" << i << ") " << toa_count(i) << std::endl;
-        toa_sum += toa_count(i);
-    }
-    std::cout << "toa sum: " << toa_sum / itot << std::endl;
-
     /*
     auto save_binary = [](const std::string& name, void* ptr, const int size)
     {
