@@ -1,0 +1,193 @@
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+#include <random>
+#include <chrono>
+
+
+struct Vector
+{
+    double x;
+    double z;
+};
+
+
+struct Photon
+{
+    Vector position;
+    Vector direction;
+};
+
+
+double sample_tau(const double random_number)
+{
+    return -1.*log(1.-random_number);
+}
+
+
+void reset_photon(
+        Photon& photon,
+        const double random_number, const double x_size, const double z_size, const double zenith_angle)
+{
+    photon.position.x = x_size * random_number;
+    photon.position.z = z_size;
+    photon.direction.x = -std::sin(zenith_angle);
+    photon.direction.z = -std::cos(zenith_angle);
+}
+
+
+void run_ray_tracer()
+{
+    const double dx_grid = 100.;
+    const int itot = 64;
+    const int ktot = 64;
+
+    const double x_size = itot*dx_grid;
+    const double z_size = ktot*dx_grid;
+
+    const double k_ext = 3.e-4;
+    const double ssa = 0.5;
+
+    std::vector<int> surface_count(itot);
+    std::vector<int> toa_count(itot);
+    std::vector<int> atmos_count(itot*ktot);
+
+    const double zenith_angle = 30.*(M_PI/180.);
+
+    const int n_photons = 10*1024*1024;
+    const int n_photon_batch = 10*1024*1024;
+    const int n_photon_loop = n_photons / n_photon_batch;
+
+
+    // Set up the random generator.
+    std::random_device rd;
+    std::mt19937 mt(rd());
+    std::uniform_real_distribution<double> dist(0., 1.);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::vector<Photon> photons(n_photon_batch);
+
+    #pragma omp parallel for
+    for (int n=0; n<n_photon_batch; ++n)
+    {
+        reset_photon(
+                photons[n],
+                dist(mt), x_size, z_size, zenith_angle);
+    }
+
+    #pragma omp parallel for
+    for (int n=0; n<n_photon_batch; ++n)
+    {
+        while (true)
+        {
+            const double dn = dist(mt) / k_ext;
+            double dx = photons[n].direction.x * dn;
+            double dz = photons[n].direction.z * dn;
+
+            bool surface_exit = false;
+            bool toa_exit = false;
+
+            if ((photons[n].position.z + dz) <= 0.)
+            {
+                const double fac = std::abs(photons[n].position.z / dz);
+                dx *= fac;
+                dz *= fac;
+
+                surface_exit = true;
+            }
+            else if ((photons[n].position.z + dz) >= z_size)
+            {
+                const double fac = std::abs((z_size - photons[n].position.z) / dz);
+                dx *= fac;
+                dz *= fac;
+
+                toa_exit = true;
+            }
+
+            photons[n].position.x += dx;
+            photons[n].position.z += dz;
+
+            // Cyclic boundary condition in x.
+            photons[n].position.x = std::fmod(photons[n].position.x, x_size);
+            if (photons[n].position.x < 0.)
+                photons[n].position.x += x_size;
+
+            if (surface_exit || toa_exit)
+            {
+                const int i = photons[n].position.x / dx_grid;
+
+                // This update is not thread safe.
+                if (surface_exit)
+                {
+                    #pragma omp atomic
+                    ++surface_count[i];
+                }
+                else
+                {
+                    #pragma omp atomic
+                    ++toa_count[i];
+                }
+
+                reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    #pragma omp parallel for
+    for (int n=0; n<n_photon_batch; ++n)
+    {
+        const double event = dist(mt);
+
+        if (event >= ssa)
+        {
+            const int i = photons[n].position.x / dx_grid;
+            const int k = photons[n].position.z / dx_grid;
+
+            // This update is not thread safe.
+            #pragma omp atomic
+            atmos_count[i + k*itot] += 1;
+
+            reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+        }
+        else
+        {
+            const double angle = 2.*M_PI*dist(mt);
+            photons[n].direction.x = std::sin(angle);
+            photons[n].direction.z = std::cos(angle);
+        }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+    std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
+
+    auto save_binary = [](const std::string& name, void* ptr, const int size)
+    {
+        std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
+
+        if (binary_file)
+            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(unsigned int));
+        else
+        {
+            std::string error = "Cannot write file \"" + name + ".bin\"";
+            throw std::runtime_error(error);
+        }
+    };
+
+    save_binary("surface", surface_count.data(), itot);
+    save_binary("toa", toa_count.data(), itot);
+    save_binary("atmos", atmos_count.data(), itot*ktot);
+}
+
+
+int main(int argc, char* argv[])
+{
+    run_ray_tracer();
+
+    return 0;
+}

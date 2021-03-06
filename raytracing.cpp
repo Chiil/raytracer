@@ -256,7 +256,6 @@ void run_ray_tracer()
     double duration = timer.seconds();
     std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
 
-    /*
     auto save_binary = [](const std::string& name, void* ptr, const int size)
     {
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
@@ -273,7 +272,6 @@ void run_ray_tracer()
     save_binary("surface", surface_count.data(), itot);
     save_binary("toa", toa_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
-    */
 }
 
 
