@@ -74,26 +74,27 @@ void run_ray_tracer()
     const double zenith_angle = 30.*(M_PI/180.);
 
     const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 4096;
+    const int n_photon_batch = 8;
     const int n_photon_loop = n_photons / n_photon_batch;
-
-    // Set up the random generator.
-    std::random_device rd;
-    std::mt19937_64 mt(rd());
-    std::uniform_real_distribution<double> dist(0., 1.);
 
     auto start = std::chrono::high_resolution_clock::now();
 
     std::vector<Photon> photons(n_photon_batch);
 
+    std::random_device rd;
+
     #pragma omp parallel for
     for (int n=0; n<n_photon_batch; ++n)
     {
+        static thread_local std::mt19937_64 mt(rd());
+        std::uniform_real_distribution<double> dist(0., 1.);
+
         reset_photon(
                 photons[n],
                 dist(mt), x_size, z_size, zenith_angle);
     }
 
+    #pragma omp parallel for
     for (int n=0; n<n_photon_batch; ++n)
     {
         const int i = photons[n].position.x / dx_grid;
@@ -107,6 +108,9 @@ void run_ray_tracer()
         #pragma omp parallel for
         for (int n=0; n<n_photon_batch; ++n)
         {
+            static thread_local std::mt19937_64 mt(rd());
+            std::uniform_real_distribution<double> dist(0., 1.);
+
             while (true)
             {
                 const double dn = sample_tau(dist(mt)) / k_ext;
@@ -172,6 +176,9 @@ void run_ray_tracer()
         #pragma omp parallel for
         for (int n=0; n<n_photon_batch; ++n)
         {
+            static thread_local std::mt19937_64 mt(rd());
+            std::uniform_real_distribution<double> dist(0., 1.);
+
             const double event = dist(mt);
 
             if (event >= ssa)
