@@ -202,8 +202,8 @@ struct Scatter_photons
 void run_ray_tracer()
 {
     const double dx = 100.;
-    const int itot = 64;
-    const int ktot = 64;
+    const int itot = 128;
+    const int ktot = 128;
 
     const double x_size = itot*dx;
     const double z_size = ktot*dx;
@@ -217,7 +217,9 @@ void run_ray_tracer()
 
     const double zenith_angle = 30. * (M_PI/180.);
 
-    const int n_photon_batch = 10*1024*1024;
+    const int n_photons = 10*1024*1024;
+    const int n_photon_batch = 4096;
+    const int n_photon_loop = n_photons / n_photon_batch;
 
     Kokkos::Random_XorShift64_Pool<> rand_pool(1);
 
@@ -231,7 +233,7 @@ void run_ray_tracer()
                 x_size, z_size, zenith_angle));
 
     Kokkos::Timer timer;
-    for (int n=0; n<1; ++n)
+    for (int nn=0; nn<n_photon_loop; ++nn)
     {
         Kokkos::parallel_for(
                 "Transport photons",

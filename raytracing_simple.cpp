@@ -19,9 +19,27 @@ struct Photon
 };
 
 
+double rayleigh(const double random_number)
+{
+    const double q = 4.*random_number-2.;
+    const double d = 1.+q*q;
+    const double u = std::pow(-q+sqrt(d), 1./3.);
+    return u-1./u;
+}
+
+
+double henyey(const double g, const double random_number)
+{
+    const double a = std::pow(1.-std::pow(g,2.), 2.);
+    const double b = 2.*g*std::pow(2*random_number*g+1.-g, 2.);
+    const double c = -g/2.-1./(2.*g);
+    return -1.*(a/b)-c;
+}
+
+
 double sample_tau(const double random_number)
 {
-    return -1.*log(1.-random_number);
+    return -1.*std::log(1.-random_number);
 }
 
 
@@ -48,19 +66,20 @@ void run_ray_tracer()
     const double k_ext = 3.e-4;
     const double ssa = 0.5;
 
-    std::vector<int> surface_count(itot);
-    std::vector<int> toa_count(itot);
-    std::vector<int> atmos_count(itot*ktot);
+    std::vector<unsigned int> surface_count(itot);
+    std::vector<unsigned int> toa_count(itot);
+    std::vector<unsigned int> input_count(itot);
+    std::vector<unsigned int> atmos_count(itot*ktot);
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 100*1024*1024;
-    const int n_photon_batch = 1024;
+    const int n_photons = 10*1024*1024;
+    const int n_photon_batch = 4096;
     const int n_photon_loop = n_photons / n_photon_batch;
 
     // Set up the random generator.
     std::random_device rd;
-    std::mt19937 mt(rd());
+    std::mt19937_64 mt(rd());
     std::uniform_real_distribution<double> dist(0., 1.);
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -75,14 +94,22 @@ void run_ray_tracer()
                 dist(mt), x_size, z_size, zenith_angle);
     }
 
+    for (int n=0; n<n_photon_batch; ++n)
+    {
+        const int i = photons[n].position.x / dx_grid;
+        #pragma omp atomic
+        ++input_count[i];
+    }
+
     for (int nn=0; nn<n_photon_loop; ++nn)
     {
+        // Transport the photons
         #pragma omp parallel for
         for (int n=0; n<n_photon_batch; ++n)
         {
             while (true)
             {
-                const double dn = dist(mt) / k_ext;
+                const double dn = sample_tau(dist(mt)) / k_ext;
                 double dx = photons[n].direction.x * dn;
                 double dz = photons[n].direction.z * dn;
 
@@ -118,7 +145,6 @@ void run_ray_tracer()
                 {
                     const int i = photons[n].position.x / dx_grid;
 
-                    // This update is not thread safe.
                     if (surface_exit)
                     {
                         #pragma omp atomic
@@ -131,6 +157,10 @@ void run_ray_tracer()
                     }
 
                     reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+
+                    const int i_new = photons[n].position.x / dx_grid;
+                    #pragma omp atomic
+                    ++input_count[i_new];
                 }
                 else
                 {
@@ -149,11 +179,14 @@ void run_ray_tracer()
                 const int i = photons[n].position.x / dx_grid;
                 const int k = photons[n].position.z / dx_grid;
 
-                // This update is not thread safe.
                 #pragma omp atomic
                 ++atmos_count[i + k*itot];
 
                 reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+
+                const int i_new = photons[n].position.x / dx_grid;
+                #pragma omp atomic
+                ++input_count[i_new];
             }
             else
             {
@@ -182,6 +215,7 @@ void run_ray_tracer()
         }
     };
 
+    save_binary("input", input_count.data(), itot);
     save_binary("surface", surface_count.data(), itot);
     save_binary("toa", toa_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
