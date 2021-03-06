@@ -39,8 +39,8 @@ void reset_photon(
 void run_ray_tracer()
 {
     const double dx_grid = 100.;
-    const int itot = 64;
-    const int ktot = 64;
+    const int itot = 128;
+    const int ktot = 128;
 
     const double x_size = itot*dx_grid;
     const double z_size = ktot*dx_grid;
@@ -54,10 +54,9 @@ void run_ray_tracer()
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 10*1024*1024;
+    const int n_photons = 1*1024*1024;
+    const int n_photon_batch = 1*1024*1024;
     const int n_photon_loop = n_photons / n_photon_batch;
-
 
     // Set up the random generator.
     std::random_device rd;
@@ -150,7 +149,7 @@ void run_ray_tracer()
 
             // This update is not thread safe.
             #pragma omp atomic
-            atmos_count[i + k*itot] += 1;
+            ++atmos_count[i + k*itot];
 
             reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
         }
@@ -166,6 +165,7 @@ void run_ray_tracer()
     double duration = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
     std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
 
+    // Save the output to disk.
     auto save_binary = [](const std::string& name, void* ptr, const int size)
     {
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
