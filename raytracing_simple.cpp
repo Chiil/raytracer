@@ -54,8 +54,8 @@ void run_ray_tracer()
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 1*1024*1024;
-    const int n_photon_batch = 1*1024*1024;
+    const int n_photons = 100*1024*1024;
+    const int n_photon_batch = 1024;
     const int n_photon_loop = n_photons / n_photon_batch;
 
     // Set up the random generator.
@@ -75,89 +75,92 @@ void run_ray_tracer()
                 dist(mt), x_size, z_size, zenith_angle);
     }
 
-    #pragma omp parallel for
-    for (int n=0; n<n_photon_batch; ++n)
+    for (int nn=0; nn<n_photon_loop; ++nn)
     {
-        while (true)
+        #pragma omp parallel for
+        for (int n=0; n<n_photon_batch; ++n)
         {
-            const double dn = dist(mt) / k_ext;
-            double dx = photons[n].direction.x * dn;
-            double dz = photons[n].direction.z * dn;
-
-            bool surface_exit = false;
-            bool toa_exit = false;
-
-            if ((photons[n].position.z + dz) <= 0.)
+            while (true)
             {
-                const double fac = std::abs(photons[n].position.z / dz);
-                dx *= fac;
-                dz *= fac;
+                const double dn = dist(mt) / k_ext;
+                double dx = photons[n].direction.x * dn;
+                double dz = photons[n].direction.z * dn;
 
-                surface_exit = true;
-            }
-            else if ((photons[n].position.z + dz) >= z_size)
-            {
-                const double fac = std::abs((z_size - photons[n].position.z) / dz);
-                dx *= fac;
-                dz *= fac;
+                bool surface_exit = false;
+                bool toa_exit = false;
 
-                toa_exit = true;
-            }
-
-            photons[n].position.x += dx;
-            photons[n].position.z += dz;
-
-            // Cyclic boundary condition in x.
-            photons[n].position.x = std::fmod(photons[n].position.x, x_size);
-            if (photons[n].position.x < 0.)
-                photons[n].position.x += x_size;
-
-            if (surface_exit || toa_exit)
-            {
-                const int i = photons[n].position.x / dx_grid;
-
-                // This update is not thread safe.
-                if (surface_exit)
+                if ((photons[n].position.z + dz) <= 0.)
                 {
-                    #pragma omp atomic
-                    ++surface_count[i];
+                    const double fac = std::abs(photons[n].position.z / dz);
+                    dx *= fac;
+                    dz *= fac;
+
+                    surface_exit = true;
+                }
+                else if ((photons[n].position.z + dz) >= z_size)
+                {
+                    const double fac = std::abs((z_size - photons[n].position.z) / dz);
+                    dx *= fac;
+                    dz *= fac;
+
+                    toa_exit = true;
+                }
+
+                photons[n].position.x += dx;
+                photons[n].position.z += dz;
+
+                // Cyclic boundary condition in x.
+                photons[n].position.x = std::fmod(photons[n].position.x, x_size);
+                if (photons[n].position.x < 0.)
+                    photons[n].position.x += x_size;
+
+                if (surface_exit || toa_exit)
+                {
+                    const int i = photons[n].position.x / dx_grid;
+
+                    // This update is not thread safe.
+                    if (surface_exit)
+                    {
+                        #pragma omp atomic
+                        ++surface_count[i];
+                    }
+                    else
+                    {
+                        #pragma omp atomic
+                        ++toa_count[i];
+                    }
+
+                    reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
                 }
                 else
                 {
-                    #pragma omp atomic
-                    ++toa_count[i];
+                    break;
                 }
+            }
+        }
+
+        #pragma omp parallel for
+        for (int n=0; n<n_photon_batch; ++n)
+        {
+            const double event = dist(mt);
+
+            if (event >= ssa)
+            {
+                const int i = photons[n].position.x / dx_grid;
+                const int k = photons[n].position.z / dx_grid;
+
+                // This update is not thread safe.
+                #pragma omp atomic
+                ++atmos_count[i + k*itot];
 
                 reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
             }
             else
             {
-                break;
+                const double angle = 2.*M_PI*dist(mt);
+                photons[n].direction.x = std::sin(angle);
+                photons[n].direction.z = std::cos(angle);
             }
-        }
-    }
-
-    #pragma omp parallel for
-    for (int n=0; n<n_photon_batch; ++n)
-    {
-        const double event = dist(mt);
-
-        if (event >= ssa)
-        {
-            const int i = photons[n].position.x / dx_grid;
-            const int k = photons[n].position.z / dx_grid;
-
-            // This update is not thread safe.
-            #pragma omp atomic
-            ++atmos_count[i + k*itot];
-
-            reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
-        }
-        else
-        {
-            const double angle = 2.*M_PI*dist(mt);
-            photons[n].direction.x = std::sin(angle);
-            photons[n].direction.z = std::cos(angle);
         }
     }
 
