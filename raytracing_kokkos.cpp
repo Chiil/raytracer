@@ -68,8 +68,8 @@ struct Initialize_photons
 struct Transport_photons
 {
     Photon_array photons;
-    Array_1d surface_count;
-    Array_1d toa_count;
+    Array_1d surface_down_count;
+    Array_1d toa_up_count;
     Kokkos::Random_XorShift64_Pool<> rand_pool;
     const double k_ext;
     const double dx_grid;
@@ -79,12 +79,12 @@ struct Transport_photons
 
     Transport_photons(
             Photon_array photons_,
-            Array_1d surface_count_, Array_1d toa_count_,
+            Array_1d surface_down_count_, Array_1d toa_up_count_,
             Kokkos::Random_XorShift64_Pool<> rand_pool_,
             const double k_ext_, const double dx_grid_,
             const double x_size_, const double z_size_, const double zenith_angle_) :
         photons(photons_),
-        surface_count(surface_count_), toa_count(toa_count_),
+        surface_down_count(surface_down_count_), toa_up_count(toa_up_count_),
         rand_pool(rand_pool_),
         k_ext(k_ext_), dx_grid(dx_grid_),
         x_size(x_size_), z_size(z_size_), zenith_angle(zenith_angle_)
@@ -134,9 +134,9 @@ struct Transport_photons
 
                 // This update is not thread safe.
                 if (surface_exit)
-                    Kokkos::atomic_increment(&surface_count(i));
+                    Kokkos::atomic_increment(&surface_down_count(i));
                 else
-                    Kokkos::atomic_increment(&toa_count(i));
+                    Kokkos::atomic_increment(&toa_up_count(i));
 
                 photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
             }
@@ -211,8 +211,8 @@ void run_ray_tracer()
     const double k_ext = 3.e-4;
     const double ssa = 0.5;
 
-    Array_1d surface_count("surface", itot);
-    Array_1d toa_count("toa", itot);
+    Array_1d surface_down_count("surface_down", itot);
+    Array_1d toa_up_count("toa_up", itot);
     Array_2d atmos_count("atmos", ktot, itot);
 
     const double zenith_angle = 30. * (M_PI/180.);
@@ -240,7 +240,7 @@ void run_ray_tracer()
                 n_photon_batch,
                 Transport_photons(
                     photons,
-                    surface_count, toa_count,
+                    surface_down_count, toa_up_count,
                     rand_pool,
                     k_ext, dx,
                     x_size, z_size, zenith_angle));
@@ -271,8 +271,8 @@ void run_ray_tracer()
         }
     };
 
-    save_binary("surface", surface_count.data(), itot);
-    save_binary("toa", toa_count.data(), itot);
+    save_binary("surface_down", surface_down_count.data(), itot);
+    save_binary("toa_up", toa_up_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
 }
 

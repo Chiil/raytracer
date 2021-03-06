@@ -66,9 +66,9 @@ void run_ray_tracer()
     const double k_ext = 3.e-4;
     const double ssa = 0.5;
 
-    std::vector<unsigned int> surface_count(itot);
-    std::vector<unsigned int> toa_count(itot);
-    std::vector<unsigned int> input_count(itot);
+    std::vector<unsigned int> surface_down_count(itot);
+    std::vector<unsigned int> toa_up_count(itot);
+    std::vector<unsigned int> toa_down_count(itot);
     std::vector<unsigned int> atmos_count(itot*ktot);
 
     const double zenith_angle = 30.*(M_PI/180.);
@@ -98,7 +98,7 @@ void run_ray_tracer()
     {
         const int i = photons[n].position.x / dx_grid;
         #pragma omp atomic
-        ++input_count[i];
+        ++toa_down_count[i];
     }
 
     for (int nn=0; nn<n_photon_loop; ++nn)
@@ -148,19 +148,19 @@ void run_ray_tracer()
                     if (surface_exit)
                     {
                         #pragma omp atomic
-                        ++surface_count[i];
+                        ++surface_down_count[i];
                     }
                     else
                     {
                         #pragma omp atomic
-                        ++toa_count[i];
+                        ++toa_up_count[i];
                     }
 
                     reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
                     const int i_new = photons[n].position.x / dx_grid;
                     #pragma omp atomic
-                    ++input_count[i_new];
+                    ++toa_down_count[i_new];
                 }
                 else
                 {
@@ -186,7 +186,7 @@ void run_ray_tracer()
 
                 const int i_new = photons[n].position.x / dx_grid;
                 #pragma omp atomic
-                ++input_count[i_new];
+                ++toa_down_count[i_new];
             }
             else
             {
@@ -215,9 +215,9 @@ void run_ray_tracer()
         }
     };
 
-    save_binary("input", input_count.data(), itot);
-    save_binary("surface", surface_count.data(), itot);
-    save_binary("toa", toa_count.data(), itot);
+    save_binary("toa_down", toa_down_count.data(), itot);
+    save_binary("toa_up", toa_up_count.data(), itot);
+    save_binary("surface_down", surface_down_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
 }
 
