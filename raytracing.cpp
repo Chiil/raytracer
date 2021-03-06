@@ -1,5 +1,6 @@
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 
 #include <Kokkos_Core.hpp>
 #include <Kokkos_Random.hpp>
@@ -131,10 +132,11 @@ struct Transport_photons
             {
                 const int i = photons(n).position.x / dx_grid;
 
+                // This update is not thread safe.
                 if (surface_exit)
-                    surface_count(i) += 1;
+                    Kokkos::atomic_increment(&surface_count(i));
                 else
-                    toa_count(i) += 1;
+                    Kokkos::atomic_increment(&toa_count(i));
 
                 photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
             }
@@ -181,7 +183,7 @@ struct Scatter_photons
             const int i = photons(n).position.x / dx;
             const int k = photons(n).position.z / dx;
 
-            atmos_count(k, i) += 1;
+            Kokkos::atomic_increment(&atmos_count(k, i));
 
             photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
         }
@@ -200,8 +202,8 @@ struct Scatter_photons
 void run_ray_tracer()
 {
     const double dx = 100.;
-    const int itot = 128;
-    const int ktot = 128;
+    const int itot = 64;
+    const int ktot = 64;
 
     const double x_size = itot*dx;
     const double z_size = ktot*dx;
@@ -215,7 +217,7 @@ void run_ray_tracer()
 
     const double zenith_angle = 30. * (M_PI/180.);
 
-    const int n_photon_batch = 1024*1024;
+    const int n_photon_batch = 10*1024*1024;
 
     Kokkos::Random_XorShift64_Pool<> rand_pool(1);
 
@@ -228,7 +230,8 @@ void run_ray_tracer()
                 photons, rand_pool,
                 x_size, z_size, zenith_angle));
 
-    for (int n=0; n<100; ++n)
+    Kokkos::Timer timer;
+    for (int n=0; n<1; ++n)
     {
         Kokkos::parallel_for(
                 "Transport photons",
@@ -248,6 +251,10 @@ void run_ray_tracer()
                     rand_pool,
                     ssa, dx, x_size, z_size, zenith_angle));
     }
+    Kokkos::fence();
+
+    double duration = timer.seconds();
+    std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
 
     /*
     auto save_binary = [](const std::string& name, void* ptr, const int size)
