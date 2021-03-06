@@ -29,6 +29,12 @@ double sample_tau(const double random_number)
     return -1.*log(1.-random_number);
 }
 
+KOKKOS_INLINE_FUNCTION
+Photon generate_photon(
+        const double random_number, const double x_size, const double z_size, const double zenith_angle)
+{
+    return Photon{ x_size * random_number, z_size, -std::sin(zenith_angle), -std::cos(zenith_angle)};
+}
 
 struct Initialize_photons
 {
@@ -49,12 +55,7 @@ struct Initialize_photons
     void operator()(const int n) const
     {
         auto rand_gen = rand_pool.get_state();
-
-        photons(n).position.x = x_size * rand_gen.drand(0., 1.);
-        photons(n).position.z = z_size;
-        photons(n).direction.x = -std::sin(zenith_angle);
-        photons(n).direction.z = -std::cos(zenith_angle);
-
+        photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
         rand_pool.free_state(rand_gen);
     }
 };
@@ -70,16 +71,19 @@ struct Transport_photons
     const double dx_grid;
     const double x_size;
     const double z_size;
+    const double zenith_angle;
 
     Transport_photons(
             Photon_array photons_,
             Array_1d surface_count_, Array_1d toa_count_,
             Kokkos::Random_XorShift64_Pool<> rand_pool_,
-            const double k_ext_, const double dx_grid_, const double x_size_, const double z_size_) :
+            const double k_ext_, const double dx_grid_,
+            const double x_size_, const double z_size_, const double zenith_angle_) :
         photons(photons_),
         surface_count(surface_count_), toa_count(toa_count_),
         rand_pool(rand_pool_),
-        k_ext(k_ext_), dx_grid(dx_grid_), x_size(x_size_), z_size(z_size_)
+        k_ext(k_ext_), dx_grid(dx_grid_),
+        x_size(x_size_), z_size(z_size_), zenith_angle(zenith_angle_)
     {}
 
     void operator()(const int n) const
@@ -167,10 +171,7 @@ struct Scatter_photons
 
             atmos_count(k, i) += 1;
 
-            photons(n).position.x = x_size * rand_gen.drand(0., 1.);
-            photons(n).position.z = z_size;
-            photons(n).direction.x = -std::sin(zenith_angle);
-            photons(n).direction.z = -std::cos(zenith_angle);
+            photons(n) = generate_photon(rand_gen.drand(0., 1.), x_size, z_size, zenith_angle);
         }
         else
         {
@@ -187,8 +188,8 @@ struct Scatter_photons
 void run_ray_tracer()
 {
     const double dx = 100.;
-    const int itot = 64;
-    const int ktot = 64;
+    const int itot = 128;
+    const int ktot = 128;
 
     const double x_size = itot*dx;
     const double z_size = ktot*dx;
@@ -200,11 +201,9 @@ void run_ray_tracer()
     Array_1d toa_count("toa", itot);
     Array_2d atmos_count("atmos", ktot, itot);
 
-    const int n_photons = 10000000;
-
     const double zenith_angle = 30. * (M_PI/180.);
 
-    const int n_photon_batch = 1024;
+    const int n_photon_batch = 1024*1024;
 
     Kokkos::Random_XorShift64_Pool<> rand_pool(1);
 
@@ -223,7 +222,7 @@ void run_ray_tracer()
     std::cout << photons(0).direction.z << std::endl;
     std::cout << "===" << std::endl;
 
-    for (int n=0; n<10; ++n)
+    for (int n=0; n<100; ++n)
     {
         Kokkos::parallel_for(
                 "Transport photons",
@@ -232,7 +231,8 @@ void run_ray_tracer()
                     photons,
                     surface_count, toa_count,
                     rand_pool,
-                    k_ext, dx, x_size, z_size));
+                    k_ext, dx,
+                    x_size, z_size, zenith_angle));
 
         Kokkos::parallel_for(
                 "Scatter photons",
