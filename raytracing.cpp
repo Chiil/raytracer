@@ -200,11 +200,11 @@ void run_ray_tracer()
     Array_1d toa_count("toa", itot);
     Array_2d atmos_count("atmos", ktot, itot);
 
-    const int n_photons = 1000000;
+    const int n_photons = 10000000;
 
     const double zenith_angle = 30. * (M_PI/180.);
 
-    const int n_photon_batch = 100;
+    const int n_photon_batch = 1024;
 
     Kokkos::Random_XorShift64_Pool<> rand_pool(1);
 
@@ -248,6 +248,18 @@ void run_ray_tracer()
         std::cout << photons(0).direction.z << std::endl;
         std::cout << "=== (" << n << ") ===" << std::endl;
     }
+
+    /*
+    std::ofstream binary_file("at_kokkos_cpu.bin", std::ios::out | std::ios::trunc | std::ios::binary);
+
+    if (binary_file)
+        binary_file.write(reinterpret_cast<const char*>(at_cpu.data()), ncells*sizeof(double));
+    else
+    {
+        std::string error = "Cannot write file \"at_cuda.bin\"";
+        throw std::runtime_error(error);
+    }
+    */
 }
 
 
