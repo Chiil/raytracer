@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-itot = 128
-ktot = 128
+itot = 100
+ktot = 100
 
 toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
@@ -18,9 +18,9 @@ plt.pcolormesh(atmos)
 plt.colorbar()
 
 plt.figure()
-plt.plot(toa_down, label='toa_down')
-plt.plot(toa_up, label='toa_up')
-plt.plot(surface_down, label='surface_down')
+plt.plot(toa_down / toa_down.mean(), label='toa_down')
+plt.plot(toa_up / toa_down.mean(), label='toa_up')
+plt.plot(surface_down / toa_down.mean(), label='surface_down')
 plt.legend(loc=0, frameon=False)
 
 plt.show()

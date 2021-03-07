@@ -39,7 +39,7 @@ double henyey(const double g, const double random_number)
 
 double sample_tau(const double random_number)
 {
-    return -1.*std::log(1.-random_number);
+    return -1.*std::log(-random_number+1.);
 }
 
 
@@ -57,15 +57,29 @@ void reset_photon(
 void run_ray_tracer()
 {
     const double dx_grid = 100.;
-    const int itot = 128;
-    const int ktot = 128;
+    const int itot = 100;
+    const int ktot = 100;
 
     const double x_size = itot*dx_grid;
     const double z_size = ktot*dx_grid;
 
-    const double k_ext = 3.e-4;
-    const double ssa = 0.5;
+    const double k_ext_gas = 3.e-4;
+    const double ssa_gas = 0.5;
 
+    const double k_ext_cloud = 5.e-3;
+    // const double ssa_cloud = 0.9;
+    // const double asy_cloud = 0.85;
+
+    const double k_ext_null = k_ext_gas + k_ext_cloud;
+
+    // Input arrays.
+    std::vector<double> k_ext(itot*ktot);
+    std::vector<double> ssa(itot*ktot);
+
+    std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
+    std::fill(ssa.begin(), ssa.end(), ssa_gas);
+
+    // Output arrays.
     std::vector<unsigned int> surface_down_count(itot);
     std::vector<unsigned int> toa_up_count(itot);
     std::vector<unsigned int> toa_down_count(itot);
@@ -73,9 +87,9 @@ void run_ray_tracer()
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 1<<19;
-    const int n_photon_loop = n_photons / n_photon_batch;
+    // const int n_photons = 10*1024*1024;
+    const int n_photon_batch = 1 << 16;
+    const int n_photon_loop = 2048;
 
     std::random_device rd;
 
@@ -113,7 +127,7 @@ void run_ray_tracer()
 
             while (true)
             {
-                const double dn = sample_tau(dist(mt)) / k_ext;
+                const double dn = sample_tau(dist(mt)) / k_ext_null;
                 double dx = photons[n].direction.x * dn;
                 double dz = photons[n].direction.z * dn;
 
@@ -179,13 +193,29 @@ void run_ray_tracer()
             thread_local std::mt19937_64 mt(rd());
             std::uniform_real_distribution<double> dist(0., 1.);
 
-            const double event = dist(mt);
+            const int i = photons[n].position.x / dx_grid;
+            const int k = photons[n].position.z / dx_grid;
 
-            if (event >= ssa)
+            const double random_number = dist(mt);
+
+            // Null collision.
+            if (random_number >= (k_ext[i + k*itot] / k_ext_null))
             {
-                const int i = photons[n].position.x / dx_grid;
-                const int k = photons[n].position.z / dx_grid;
+                continue;
+            }
+            // Scattering.
+            else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
+            {
+                const double mu_scat = rayleigh(dist(mt));
+                const double angle = (-1.+2.*(dist(mt)>.5)) * std::acos(mu_scat)
+                    + std::atan2(photons[n].direction.x, photons[n].direction.z);
 
+                photons[n].direction.x = std::sin(angle);
+                photons[n].direction.z = std::cos(angle);
+            }
+            // Absorption.
+            else
+            {
                 #pragma omp atomic
                 ++atmos_count[i + k*itot];
 
@@ -194,15 +224,6 @@ void run_ray_tracer()
                 const int i_new = photons[n].position.x / dx_grid;
                 #pragma omp atomic
                 ++toa_down_count[i_new];
-            }
-            else
-            {
-                const double mu_scat = rayleigh(dist(mt));
-                const double angle = (-1.+2.*(dist(mt)>.5)) * std::acos(mu_scat)
-                    + std::atan2(photons[n].direction.x, photons[n].direction.z);
-
-                photons[n].direction.x = std::sin(angle);
-                photons[n].direction.z = std::cos(angle);
             }
         }
     }
