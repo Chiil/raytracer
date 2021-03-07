@@ -77,11 +77,11 @@ void run_ray_tracer()
     const int n_photon_batch = 1<<16;
     const int n_photon_loop = n_photons / n_photon_batch;
 
+    std::random_device rd;
+
     auto start = std::chrono::high_resolution_clock::now();
 
     std::vector<Photon> photons(n_photon_batch);
-
-    std::random_device rd;
 
     #pragma omp parallel for
     for (int n=0; n<n_photon_batch; ++n)
