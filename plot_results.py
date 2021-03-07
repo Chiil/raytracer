@@ -14,7 +14,7 @@ print('out: ', surface_down.sum() + toa_up.sum() + atmos.sum())
 print('balance: ', toa_down.sum() - (surface_down.sum() + toa_up.sum() + atmos.sum()))
 
 plt.figure()
-plt.pcolormesh(atmos)
+plt.pcolormesh(atmos, cmap=plt.cm.plasma)
 plt.colorbar()
 
 plt.figure()

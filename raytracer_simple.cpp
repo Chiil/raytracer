@@ -79,6 +79,11 @@ void run_ray_tracer()
     std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
+    // Add a cloud
+    for (int k=45; k<55; ++k)
+        for (int i=45; i<55; ++i)
+            k_ext[i + k*itot] += k_ext_cloud;
+
     // Output arrays.
     std::vector<unsigned int> surface_down_count(itot);
     std::vector<unsigned int> toa_up_count(itot);
