@@ -56,33 +56,41 @@ void reset_photon(
 
 void run_ray_tracer()
 {
-    const double dx_grid = 100.;
-    const int itot = 100;
-    const int ktot = 100;
+    const double dx_grid = 25.;
+    const int itot = 256;
+    const int ktot = 128;
 
     const double x_size = itot*dx_grid;
     const double z_size = ktot*dx_grid;
 
-    const double k_ext_gas = 3.e-4;
+    const double k_ext_gas = 1.e-4; // 3.e-4;
     const double ssa_gas = 0.5;
+    const double asy_gas = 0.;
 
     const double k_ext_cloud = 5.e-3;
-    // const double ssa_cloud = 0.9;
-    // const double asy_cloud = 0.85;
+    const double ssa_cloud = 0.9;
+    const double asy_cloud = 0.85;
 
     const double k_ext_null = k_ext_gas + k_ext_cloud;
 
     // Input arrays.
     std::vector<double> k_ext(itot*ktot);
     std::vector<double> ssa(itot*ktot);
+    std::vector<double> asy(itot*ktot);
 
     std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
     // Add a cloud
-    // for (int k=25; k<35; ++k)
-    //     for (int i=40; i<60; ++i)
-    //         k_ext[i + k*itot] += k_ext_cloud;
+    for (int k=40; k<60; ++k)
+        for (int i=160; i<200; ++i)
+        {
+            k_ext[i + k*itot] = k_ext_gas + k_ext_cloud;
+            ssa[i + k*itot] = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
+                            / (k_ext_gas + k_ext_cloud);
+            asy[i + k*itot] = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
+                            / (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud);
+        }
 
     // Output arrays.
     std::vector<unsigned int> surface_down_count(itot);
@@ -90,11 +98,11 @@ void run_ray_tracer()
     std::vector<unsigned int> toa_down_count(itot);
     std::vector<unsigned int> atmos_count(itot*ktot);
 
-    const double zenith_angle = 30.*(M_PI/180.);
+    const double zenith_angle = 50.*(M_PI/180.);
 
     // const int n_photons = 10*1024*1024;
     const int n_photon_batch = 1 << 18;
-    const int n_photon_loop = 1024;
+    const int n_photon_loop = 2048;
 
     std::random_device rd;
 
@@ -211,7 +219,8 @@ void run_ray_tracer()
             // Scattering.
             else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
             {
-                const double mu_scat = rayleigh(dist(mt));
+                const bool cloud_scatter = dist(mt) < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
+                const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], dist(mt)) : rayleigh(dist(mt));
                 const double angle = (-1.+2.*(dist(mt)>.5)) * std::acos(mu_scat)
                     + std::atan2(photons[n].direction.x, photons[n].direction.z);
 

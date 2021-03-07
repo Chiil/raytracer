@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-itot = 100
-ktot = 100
+itot = 256
+ktot = 128
 
 toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
