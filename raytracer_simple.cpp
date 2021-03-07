@@ -197,7 +197,10 @@ void run_ray_tracer()
             }
             else
             {
-                const double angle = 2.*M_PI*dist(mt);
+                const double mu_scat = rayleigh(dist(mt));
+                const double angle = (-1.+2.*(dist(mt)>.5)) * std::acos(mu_scat)
+                    + std::atan2(photons[n].direction.x, photons[n].direction.z);
+
                 photons[n].direction.x = std::sin(angle);
                 photons[n].direction.z = std::cos(angle);
             }
