@@ -73,7 +73,7 @@ void run_ray_tracer()
 
     const double zenith_angle = 30.*(M_PI/180.);
 
-    const int n_photons = 256*1024*1024;
+    const int n_photons = 10*1024*1024;
     const int n_photon_batch = 1<<16;
     const int n_photon_loop = n_photons / n_photon_batch;
 
