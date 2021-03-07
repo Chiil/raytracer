@@ -80,9 +80,9 @@ void run_ray_tracer()
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
     // Add a cloud
-    for (int k=45; k<55; ++k)
-        for (int i=45; i<55; ++i)
-            k_ext[i + k*itot] += k_ext_cloud;
+    // for (int k=25; k<35; ++k)
+    //     for (int i=40; i<60; ++i)
+    //         k_ext[i + k*itot] += k_ext_cloud;
 
     // Output arrays.
     std::vector<unsigned int> surface_down_count(itot);
@@ -93,8 +93,8 @@ void run_ray_tracer()
     const double zenith_angle = 30.*(M_PI/180.);
 
     // const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 1 << 16;
-    const int n_photon_loop = 2048;
+    const int n_photon_batch = 1 << 18;
+    const int n_photon_loop = 1024;
 
     std::random_device rd;
 
