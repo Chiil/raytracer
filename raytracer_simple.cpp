@@ -11,8 +11,10 @@ struct Vector
     double z;
 };
 
+
 enum class Photon_kind { Direct, Diffuse };
 enum class Photon_status { Enabled, Disabled };
+
 
 struct Photon
 {
@@ -139,11 +141,14 @@ void run_ray_tracer()
     }
 
     int n_photons_in = n_photons_batch;
+    int n_photons_out = 0;
 
-    while (n_photons_in < n_photons)
+    while ( (n_photons_in < n_photons) || (n_photons_in > n_photons_out))
     {
+        const bool photon_generation_completed = n_photons_in >= n_photons;
+
         // Transport the photons
-        #pragma omp parallel for reduction(+:n_photons_in)
+        #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
         for (int n=0; n<n_photons_batch; ++n)
         {
             thread_local std::mt19937_64 mt(rd());
@@ -183,76 +188,82 @@ void run_ray_tracer()
                 if (photons[n].position.x < 0.)
                     photons[n].position.x += x_size;
 
-                if (surface_exit || toa_exit)
+                // Handle the surface and top exits.
+                const int i = photons[n].position.x / dx_grid;
+
+                if (surface_exit)
                 {
-                    const int i = photons[n].position.x / dx_grid;
-
-                    if (surface_exit)
+                    if (photons[n].kind == Photon_kind::Direct
+                            && photons[n].status == Photon_status::Enabled)
                     {
-                        if (photons[n].kind == Photon_kind::Direct
-                                && photons[n].status == Photon_status::Enabled)
+                        ++n_photons_out;
+
+                        #pragma omp atomic
+                        ++surface_down_direct_count[i];
+                    }
+                    else if (photons[n].kind == Photon_kind::Diffuse
+                            && photons[n].status == Photon_status::Enabled)
+                    {
+                        ++n_photons_out;
+
+                        #pragma omp atomic
+                        ++surface_down_diffuse_count[i];
+                    }
+
+                    // Scatter if smaller than albedo, otherwise absorb
+                    if (dist(mt) <= surface_albedo)
+                    {
+                        if (photons[n].status == Photon_status::Enabled)
                         {
+                            --n_photons_out;
                             #pragma omp atomic
-                            ++surface_down_direct_count[i];
-                        }
-                        else if (photons[n].status == Photon_status::Enabled)
-                        {
-                            #pragma omp atomic
-                            ++surface_down_diffuse_count[i];
+                            ++surface_up_count[i];
                         }
 
-                        // Scatter if smaller than albedo, otherwise absorb
-                        if (dist(mt) <= surface_albedo)
-                        {
-                            if (photons[n].status == Photon_status::Enabled)
-                            {
-                                #pragma omp atomic
-                                ++surface_up_count[i];
-                            }
-
-                            const double mu_surface = sqrt(dist(mt));
-                            photons[n].direction.x = mu_surface;
-                            photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
-                            photons[n].kind = Photon_kind::Diffuse;
-                        }
-                        else
-                        {
-                            reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
-
-                            if (n_photons_in >= n_photons)
-                                photons[n].status = Photon_status::Disabled;
-                            else
-                                ++n_photons_in;
-
-                            if (photons[n].status == Photon_status::Enabled)
-                            {
-                                const int i_new = photons[n].position.x / dx_grid;
-                                #pragma omp atomic
-                                ++toa_down_count[i_new];
-                            }
-                        }
+                        const double mu_surface = sqrt(dist(mt));
+                        photons[n].direction.x = mu_surface;
+                        photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
+                        photons[n].kind = Photon_kind::Diffuse;
                     }
                     else
                     {
-                        if (photons[n].status == Photon_status::Enabled)
-                        {
-                            #pragma omp atomic
-                            ++toa_up_count[i];
-                        }
-
                         reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
-                        if (n_photons_in >= n_photons)
+                        if (photon_generation_completed)
                             photons[n].status = Photon_status::Disabled;
-                        else
-                            ++n_photons_in;
 
                         if (photons[n].status == Photon_status::Enabled)
                         {
+                            ++n_photons_in;
+
                             const int i_new = photons[n].position.x / dx_grid;
                             #pragma omp atomic
                             ++toa_down_count[i_new];
                         }
+                    }
+                }
+                else if (toa_exit)
+                {
+                    if (photons[n].status == Photon_status::Enabled)
+                    {
+                        ++n_photons_out;
+
+                        #pragma omp atomic
+                        ++toa_up_count[i];
+                    }
+
+                    reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+
+                    if (photon_generation_completed)
+                        photons[n].status = Photon_status::Disabled;
+
+                    if (photons[n].status == Photon_status::Enabled)
+                    {
+                        ++n_photons_in;
+
+                        const int i_new = photons[n].position.x / dx_grid;
+                        #pragma omp atomic
+                        ++toa_down_count[i_new];
                     }
                 }
                 else
@@ -263,7 +274,7 @@ void run_ray_tracer()
         }
 
         // Handle the collision events.
-        #pragma omp parallel for reduction(+:n_photons_in)
+        #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
         for (int n=0; n<n_photons_batch; ++n)
         {
             thread_local std::mt19937_64 mt(rd());
@@ -277,7 +288,6 @@ void run_ray_tracer()
             // Null collision.
             if (random_number >= (k_ext[i + k*itot] / k_ext_null))
             {
-                continue;
             }
             // Scattering.
             else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
@@ -296,19 +306,20 @@ void run_ray_tracer()
             {
                 if (photons[n].status == Photon_status::Enabled)
                 {
+                    ++n_photons_out;
                     #pragma omp atomic
                     ++atmos_count[i + k*itot];
                 }
 
                 reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
-                if (n_photons_in >= n_photons)
+                if (photon_generation_completed)
                     photons[n].status = Photon_status::Disabled;
-                else
-                    ++n_photons_in;
         
                 if (photons[n].status == Photon_status::Enabled)
                 {
+                    ++n_photons_in;
+
                     const int i_new = photons[n].position.x / dx_grid;
                     #pragma omp atomic
                     ++toa_down_count[i_new];
