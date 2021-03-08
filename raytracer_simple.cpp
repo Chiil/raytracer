@@ -103,18 +103,17 @@ void run_ray_tracer()
 
     const double zenith_angle = 50.*(M_PI/180.);
 
-    // const int n_photons = 10*1024*1024;
-    const int n_photon_batch = 1 << 18;
-    const int n_photon_loop = 2048;
+    const int n_photons = 10*1000*1000;
+    const int n_photons_batch = 1 << 18;
 
     std::random_device rd;
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    std::vector<Photon> photons(n_photon_batch);
+    std::vector<Photon> photons(n_photons_batch);
 
     #pragma omp parallel for
-    for (int n=0; n<n_photon_batch; ++n)
+    for (int n=0; n<n_photons_batch; ++n)
     {
         thread_local std::mt19937_64 mt(rd());
         std::uniform_real_distribution<double> dist(0., 1.);
@@ -125,18 +124,20 @@ void run_ray_tracer()
     }
 
     #pragma omp parallel for
-    for (int n=0; n<n_photon_batch; ++n)
+    for (int n=0; n<n_photons_batch; ++n)
     {
         const int i = photons[n].position.x / dx_grid;
         #pragma omp atomic
         ++toa_down_count[i];
     }
 
-    for (int nn=0; nn<n_photon_loop; ++nn)
+    int n_photons_in = n_photons_batch;
+
+    while (n_photons_in < n_photons)
     {
         // Transport the photons
-        #pragma omp parallel for
-        for (int n=0; n<n_photon_batch; ++n)
+        #pragma omp parallel for reduction(+:n_photons_in)
+        for (int n=0; n<n_photons_batch; ++n)
         {
             thread_local std::mt19937_64 mt(rd());
             std::uniform_real_distribution<double> dist(0., 1.);
@@ -196,6 +197,7 @@ void run_ray_tracer()
                         }
                         else
                         {
+                            ++n_photons_in;
                             reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
                             const int i_new = photons[n].position.x / dx_grid;
@@ -208,6 +210,7 @@ void run_ray_tracer()
                         #pragma omp atomic
                         ++toa_up_count[i];
 
+                        ++n_photons_in;
                         reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
                         const int i_new = photons[n].position.x / dx_grid;
@@ -222,8 +225,9 @@ void run_ray_tracer()
             }
         }
 
-        #pragma omp parallel for
-        for (int n=0; n<n_photon_batch; ++n)
+        // Handle the collision events.
+        #pragma omp parallel for reduction(+:n_photons_in)
+        for (int n=0; n<n_photons_batch; ++n)
         {
             thread_local std::mt19937_64 mt(rd());
             std::uniform_real_distribution<double> dist(0., 1.);
@@ -255,6 +259,7 @@ void run_ray_tracer()
                 #pragma omp atomic
                 ++atmos_count[i + k*itot];
 
+                ++n_photons_in;
                 reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
                 const int i_new = photons[n].position.x / dx_grid;

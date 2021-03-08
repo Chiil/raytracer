@@ -14,8 +14,8 @@ toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
 atmos = np.fromfile('atmos.bin', dtype=np.uint32).reshape((ktot, itot))
 
-balance_in = np.int32(toa_down.sum() + surface_up.sum())
-balance_out = np.int32(surface_down.sum() + toa_up.sum() + atmos.sum())
+balance_in = np.int32(toa_down.sum())
+balance_out = np.int32(surface_down.sum() - surface_up.sum() + toa_up.sum() + atmos.sum())
 balance_net = balance_in - balance_out
 
 print('in: ', balance_in)
