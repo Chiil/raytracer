@@ -2,6 +2,8 @@ import numpy as np
 import scipy.ndimage
 import matplotlib.pyplot as plt
 
+
+# Set the grid and load the data.
 itot = 256
 ktot = 128
 dx = 25
@@ -17,6 +19,8 @@ toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
 atmos = np.fromfile('atmos.bin', dtype=np.uint32).reshape((ktot, itot))
 
+
+# Check the photon balance.
 balance_in = np.int32(toa_down.sum())
 balance_out = np.int32(
         surface_down.sum() - surface_up.sum() + toa_up.sum() + atmos.sum())
@@ -26,6 +30,8 @@ print('in: ', balance_in)
 print('out: ', balance_out)
 print('balance: ', balance_net)
 
+
+# Normalize the data.
 norm = toa_down.mean()
 surface_down_direct = surface_down_direct / norm
 surface_down_diffuse = surface_down_diffuse / norm
@@ -35,6 +41,8 @@ toa_down = toa_down / norm
 toa_up = toa_up / norm
 atmos = atmos / norm
 
+
+# Plot the data.
 plt.figure()
 plt.pcolormesh(x, z, atmos, shading='nearest',
         cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
@@ -54,8 +62,9 @@ plt.xlabel('x (m)')
 plt.ylabel('normalized irradiance (-)')
 plt.ylim(0, 1.3)
 
+
 # Filter the data
-sigma = 2.
+sigma = 1.5
 smooth_data_1d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode='wrap')
 smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['reflect', 'wrap'])
 
@@ -68,6 +77,7 @@ toa_up_filtered = smooth_data_1d(toa_up)
 atmos_filtered = smooth_data_2d(atmos)
 
 
+# Plot the filtered data.
 plt.figure()
 plt.pcolormesh(x, z, atmos_filtered, shading='nearest',
         cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
