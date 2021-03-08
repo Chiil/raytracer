@@ -60,6 +60,8 @@ void run_ray_tracer()
     const int itot = 256;
     const int ktot = 128;
 
+    const double surface_albedo = 0.2;
+
     const double x_size = itot*dx_grid;
     const double z_size = ktot*dx_grid;
 
@@ -94,8 +96,9 @@ void run_ray_tracer()
 
     // Output arrays.
     std::vector<unsigned int> surface_down_count(itot);
-    std::vector<unsigned int> toa_up_count(itot);
+    std::vector<unsigned int> surface_up_count(itot);
     std::vector<unsigned int> toa_down_count(itot);
+    std::vector<unsigned int> toa_up_count(itot);
     std::vector<unsigned int> atmos_count(itot*ktot);
 
     const double zenith_angle = 50.*(M_PI/180.);
@@ -180,18 +183,37 @@ void run_ray_tracer()
                     {
                         #pragma omp atomic
                         ++surface_down_count[i];
+
+                        // Scatter if smaller than albedo, otherwise absorb
+                        if (dist(mt) <= surface_albedo)
+                        {
+                            #pragma omp atomic
+                            ++surface_up_count[i];
+
+                            const double mu_surface = sqrt(dist(mt));
+                            photons[n].direction.x = mu_surface;
+                            photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
+                        }
+                        else
+                        {
+                            reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+
+                            const int i_new = photons[n].position.x / dx_grid;
+                            #pragma omp atomic
+                            ++toa_down_count[i_new];
+                        }
                     }
                     else
                     {
                         #pragma omp atomic
                         ++toa_up_count[i];
+
+                        reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+
+                        const int i_new = photons[n].position.x / dx_grid;
+                        #pragma omp atomic
+                        ++toa_down_count[i_new];
                     }
-
-                    reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
-
-                    const int i_new = photons[n].position.x / dx_grid;
-                    #pragma omp atomic
-                    ++toa_down_count[i_new];
                 }
                 else
                 {
@@ -263,6 +285,7 @@ void run_ray_tracer()
     save_binary("toa_down", toa_down_count.data(), itot);
     save_binary("toa_up", toa_up_count.data(), itot);
     save_binary("surface_down", surface_down_count.data(), itot);
+    save_binary("surface_up", surface_up_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
 }
 
