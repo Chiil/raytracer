@@ -11,11 +11,13 @@ struct Vector
     double z;
 };
 
+enum class Photon_status { Direct, Diffuse, Inactive };
 
 struct Photon
 {
     Vector position;
     Vector direction;
+    Photon_status status;
 };
 
 
@@ -51,6 +53,7 @@ void reset_photon(
     photon.position.z = z_size;
     photon.direction.x = -std::sin(zenith_angle);
     photon.direction.z = -std::cos(zenith_angle);
+    photon.status = Photon_status::Direct;
 }
 
 
@@ -95,7 +98,8 @@ void run_ray_tracer()
         }
 
     // Output arrays.
-    std::vector<unsigned int> surface_down_count(itot);
+    std::vector<unsigned int> surface_down_direct_count(itot);
+    std::vector<unsigned int> surface_down_diffuse_count(itot);
     std::vector<unsigned int> surface_up_count(itot);
     std::vector<unsigned int> toa_down_count(itot);
     std::vector<unsigned int> toa_up_count(itot);
@@ -103,8 +107,8 @@ void run_ray_tracer()
 
     const double zenith_angle = 50.*(M_PI/180.);
 
-    const int n_photons = 10*1000*1000;
-    const int n_photons_batch = 1 << 18;
+    const int n_photons = 30*1000*1000;
+    const int n_photons_batch = 1 << 19;
 
     std::random_device rd;
 
@@ -182,8 +186,16 @@ void run_ray_tracer()
 
                     if (surface_exit)
                     {
-                        #pragma omp atomic
-                        ++surface_down_count[i];
+                        if (photons[n].status == Photon_status::Direct)
+                        {
+                            #pragma omp atomic
+                            ++surface_down_direct_count[i];
+                        }
+                        else
+                        {
+                            #pragma omp atomic
+                            ++surface_down_diffuse_count[i];
+                        }
 
                         // Scatter if smaller than albedo, otherwise absorb
                         if (dist(mt) <= surface_albedo)
@@ -194,6 +206,7 @@ void run_ray_tracer()
                             const double mu_surface = sqrt(dist(mt));
                             photons[n].direction.x = mu_surface;
                             photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
+                            photons[n].status = Photon_status::Diffuse;
                         }
                         else
                         {
@@ -252,6 +265,7 @@ void run_ray_tracer()
 
                 photons[n].direction.x = std::sin(angle);
                 photons[n].direction.z = std::cos(angle);
+                photons[n].status = Photon_status::Diffuse;
             }
             // Absorption.
             else
@@ -289,7 +303,8 @@ void run_ray_tracer()
 
     save_binary("toa_down", toa_down_count.data(), itot);
     save_binary("toa_up", toa_up_count.data(), itot);
-    save_binary("surface_down", surface_down_count.data(), itot);
+    save_binary("surface_down_direct", surface_down_direct_count.data(), itot);
+    save_binary("surface_down_diffuse", surface_down_diffuse_count.data(), itot);
     save_binary("surface_up", surface_up_count.data(), itot);
     save_binary("atmos", atmos_count.data(), itot*ktot);
 }
