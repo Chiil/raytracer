@@ -87,7 +87,7 @@ plt.ylabel('z (m)')
 
 plt.figure()
 plt.plot(x, surface_down_filtered, 'C0-', label='surf_dn')
-plt.plot(x, surface_down, 'k:', linewidth=1.2, alpha=0.5)
+plt.plot(x, surface_down, 'k:', linewidth=0.8, alpha=0.5)
 plt.plot(x, surface_down_direct_filtered, 'C0--', label='surf_dn_dir')
 plt.plot(x, surface_down_diffuse_filtered, 'C0:', label='surf_dn_dif')
 plt.plot(x, surface_up_filtered, 'C1-', label='surf_up')
