@@ -63,7 +63,7 @@ void reset_photon(
 }
 
 
-void run_ray_tracer()
+void run_ray_tracer(const int n_photons)
 {
     const double dx_grid = 25.;
     const int itot = 256;
@@ -93,14 +93,17 @@ void run_ray_tracer()
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
     // Add a cloud
-    for (int k=40; k<60; ++k)
-        for (int i=160; i<200; ++i)
+    for (int k=0; k<ktot; ++k)
+        for (int i=0; i<itot; ++i)
         {
-            k_ext[i + k*itot] = k_ext_gas + k_ext_cloud;
-            ssa[i + k*itot] = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
-                            / (k_ext_gas + k_ext_cloud);
-            asy[i + k*itot] = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
-                            / (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud);
+            if (i*dx_grid > 4000 && i*dx_grid < 5000 && k*dx_grid > 1000 && k*dx_grid < 1500.)
+            {
+                k_ext[i + k*itot] = k_ext_gas + k_ext_cloud;
+                ssa[i + k*itot] = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
+                                / (k_ext_gas + k_ext_cloud);
+                asy[i + k*itot] = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
+                                / (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud);
+            }
         }
 
     // Output arrays.
@@ -113,7 +116,6 @@ void run_ray_tracer()
 
     const double zenith_angle = 50.*(M_PI/180.);
 
-    const int n_photons = 10*1000*1000;
     const int n_photons_batch = 1 << 16;
 
     std::random_device rd;
@@ -316,7 +318,7 @@ void run_ray_tracer()
 
                 if (photon_generation_completed)
                     photons[n].status = Photon_status::Disabled;
-        
+
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     ++n_photons_in;
@@ -358,7 +360,15 @@ void run_ray_tracer()
 
 int main(int argc, char* argv[])
 {
-    run_ray_tracer();
+    if (argc != 2)
+    {
+        std::cout << "Add the multiple of 100,000 photons as an argument!" << std::endl;
+        return 1;
+    }
+
+    const int n_photons = std::stoi(argv[1]) * 100000;
+
+    run_ray_tracer(n_photons);
 
     return 0;
 }
