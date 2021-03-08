@@ -24,28 +24,29 @@ struct Photon
     Photon_status status;
 };
 
+double pow2(const double d) { return d*d; }
 
 double rayleigh(const double random_number)
 {
-    const double q = 4.*random_number-2.;
-    const double d = 1.+q*q;
-    const double u = std::pow(-q+sqrt(d), 1./3.);
-    return u-1./u;
+    const double q = 4.*random_number - 2.;
+    const double d = 1. + pow2(q);
+    const double u = std::pow(-q + sqrt(d), 1./3.);
+    return u - 1./u;
 }
 
 
 double henyey(const double g, const double random_number)
 {
-    const double a = std::pow(1.-std::pow(g,2.), 2.);
-    const double b = 2.*g*std::pow(2*random_number*g+1.-g, 2.);
-    const double c = -g/2.-1./(2.*g);
-    return -1.*(a/b)-c;
+    const double a = pow2(1. - pow2(g));
+    const double b = 2.*g*pow2(2.*random_number*g + 1. - g);
+    const double c = -g/2. - 1./(2.*g);
+    return -1.*(a/b) - c;
 }
 
 
 double sample_tau(const double random_number)
 {
-    return -1.*std::log(-random_number+1.);
+    return -1.*std::log(-random_number + 1.);
 }
 
 
