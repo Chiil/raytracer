@@ -112,7 +112,7 @@ void run_ray_tracer()
 
     const double zenith_angle = 50.*(M_PI/180.);
 
-    const int n_photons = 4*1000*1000;
+    const int n_photons = 10*1000*1000;
     const int n_photons_batch = 1 << 16;
 
     std::random_device rd;
