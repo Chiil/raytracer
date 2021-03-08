@@ -11,12 +11,14 @@ struct Vector
     double z;
 };
 
-enum class Photon_status { Direct, Diffuse, Inactive };
+enum class Photon_kind { Direct, Diffuse };
+enum class Photon_status { Enabled, Disabled };
 
 struct Photon
 {
     Vector position;
     Vector direction;
+    Photon_kind kind;
     Photon_status status;
 };
 
@@ -53,7 +55,8 @@ void reset_photon(
     photon.position.z = z_size;
     photon.direction.x = -std::sin(zenith_angle);
     photon.direction.z = -std::cos(zenith_angle);
-    photon.status = Photon_status::Direct;
+    photon.kind = Photon_kind::Direct;
+    photon.status = Photon_status::Enabled;
 }
 
 
@@ -186,12 +189,13 @@ void run_ray_tracer()
 
                     if (surface_exit)
                     {
-                        if (photons[n].status == Photon_status::Direct)
+                        if (photons[n].kind == Photon_kind::Direct
+                                && photons[n].status == Photon_status::Enabled)
                         {
                             #pragma omp atomic
                             ++surface_down_direct_count[i];
                         }
-                        else
+                        else if (photons[n].status == Photon_status::Enabled)
                         {
                             #pragma omp atomic
                             ++surface_down_diffuse_count[i];
@@ -200,35 +204,55 @@ void run_ray_tracer()
                         // Scatter if smaller than albedo, otherwise absorb
                         if (dist(mt) <= surface_albedo)
                         {
-                            #pragma omp atomic
-                            ++surface_up_count[i];
+                            if (photons[n].status == Photon_status::Enabled)
+                            {
+                                #pragma omp atomic
+                                ++surface_up_count[i];
+                            }
 
                             const double mu_surface = sqrt(dist(mt));
                             photons[n].direction.x = mu_surface;
                             photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
-                            photons[n].status = Photon_status::Diffuse;
+                            photons[n].kind = Photon_kind::Diffuse;
                         }
                         else
                         {
-                            ++n_photons_in;
                             reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
-                            const int i_new = photons[n].position.x / dx_grid;
-                            #pragma omp atomic
-                            ++toa_down_count[i_new];
+                            if (n_photons_in >= n_photons)
+                                photons[n].status = Photon_status::Disabled;
+                            else
+                                ++n_photons_in;
+
+                            if (photons[n].status == Photon_status::Enabled)
+                            {
+                                const int i_new = photons[n].position.x / dx_grid;
+                                #pragma omp atomic
+                                ++toa_down_count[i_new];
+                            }
                         }
                     }
                     else
                     {
-                        #pragma omp atomic
-                        ++toa_up_count[i];
+                        if (photons[n].status == Photon_status::Enabled)
+                        {
+                            #pragma omp atomic
+                            ++toa_up_count[i];
+                        }
 
-                        ++n_photons_in;
                         reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
-                        const int i_new = photons[n].position.x / dx_grid;
-                        #pragma omp atomic
-                        ++toa_down_count[i_new];
+                        if (n_photons_in >= n_photons)
+                            photons[n].status = Photon_status::Disabled;
+                        else
+                            ++n_photons_in;
+
+                        if (photons[n].status == Photon_status::Enabled)
+                        {
+                            const int i_new = photons[n].position.x / dx_grid;
+                            #pragma omp atomic
+                            ++toa_down_count[i_new];
+                        }
                     }
                 }
                 else
@@ -265,20 +289,30 @@ void run_ray_tracer()
 
                 photons[n].direction.x = std::sin(angle);
                 photons[n].direction.z = std::cos(angle);
-                photons[n].status = Photon_status::Diffuse;
+                photons[n].kind = Photon_kind::Diffuse;
             }
             // Absorption.
             else
             {
-                #pragma omp atomic
-                ++atmos_count[i + k*itot];
+                if (photons[n].status == Photon_status::Enabled)
+                {
+                    #pragma omp atomic
+                    ++atmos_count[i + k*itot];
+                }
 
-                ++n_photons_in;
                 reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
 
-                const int i_new = photons[n].position.x / dx_grid;
-                #pragma omp atomic
-                ++toa_down_count[i_new];
+                if (n_photons_in >= n_photons)
+                    photons[n].status = Photon_status::Disabled;
+                else
+                    ++n_photons_in;
+        
+                if (photons[n].status == Photon_status::Enabled)
+                {
+                    const int i_new = photons[n].position.x / dx_grid;
+                    #pragma omp atomic
+                    ++toa_down_count[i_new];
+                }
             }
         }
     }
