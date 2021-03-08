@@ -8,14 +8,17 @@ dx = 25
 x = np.arange(0, itot*dx, dx)
 z = np.arange(0, ktot*dx, dx)
 
-surface_down = np.fromfile('surface_down.bin', dtype=np.uint32)
+surface_down_direct = np.fromfile('surface_down_direct.bin', dtype=np.uint32)
+surface_down_diffuse = np.fromfile('surface_down_diffuse.bin', dtype=np.uint32)
+surface_down = surface_down_direct + surface_down_diffuse
 surface_up = np.fromfile('surface_up.bin', dtype=np.uint32)
 toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
 atmos = np.fromfile('atmos.bin', dtype=np.uint32).reshape((ktot, itot))
 
 balance_in = np.int32(toa_down.sum())
-balance_out = np.int32(surface_down.sum() - surface_up.sum() + toa_up.sum() + atmos.sum())
+balance_out = np.int32(
+        surface_down.sum() - surface_up.sum() + toa_up.sum() + atmos.sum())
 balance_net = balance_in - balance_out
 
 print('in: ', balance_in)
@@ -29,12 +32,15 @@ plt.ylabel('z (m)')
 plt.colorbar()
 
 plt.figure()
-plt.plot(x, surface_down / toa_down.mean(), label='surface_down')
-plt.plot(x, surface_up / toa_down.mean(), label='surface_up')
-plt.plot(x, toa_down / toa_down.mean(), label='toa_down')
-plt.plot(x, toa_up / toa_down.mean(), label='toa_up')
-plt.legend(loc=0, frameon=False)
+plt.plot(x, surface_down / toa_down.mean(), 'C0-', label='surf_dn')
+plt.plot(x, surface_down_direct / toa_down.mean(), 'C0--', label='surf_dn_dir')
+plt.plot(x, surface_down_diffuse / toa_down.mean(), 'C0:', label='surf_dn_dif')
+plt.plot(x, surface_up / toa_down.mean(), 'C1-', label='surf_up')
+plt.plot(x, toa_down / toa_down.mean(), 'C2-', label='toa_dn')
+plt.plot(x, toa_up / toa_down.mean(), 'C3-', label='toa_up')
+plt.legend(loc=0, frameon=False, ncol=3)
 plt.xlabel('x (m)')
 plt.ylabel('normalized irradiance (-)')
+plt.ylim(0, 1.3)
 
 plt.show()
