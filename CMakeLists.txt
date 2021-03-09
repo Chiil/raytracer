@@ -33,4 +33,4 @@ if(NOT HAS_CACHE)
     mark_as_advanced(HAS_CACHE)
 endif()
 
-add_executable(raytracer raytracer.cpp)
+add_executable(raytracer src/raytracer.cpp)
