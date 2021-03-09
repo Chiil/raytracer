@@ -42,6 +42,7 @@ toa_up = toa_up / norm
 atmos = atmos / norm
 
 
+"""
 # Plot the data.
 plt.figure()
 plt.pcolormesh(x, z, atmos, shading='nearest',
@@ -61,6 +62,7 @@ plt.legend(loc=0, ncol=3)
 plt.xlabel('x (m)')
 plt.ylabel('normalized irradiance (-)')
 plt.ylim(0, 1.3)
+"""
 
 
 # Filter the data
