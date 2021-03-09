@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 itot = 256
 ktot = 128
 dx = 25
+sigma_x = 40
 
 x = np.arange(0.5*dx, itot*dx, dx)
 z = np.arange(0.5*dx, ktot*dx, dx)
@@ -66,7 +67,7 @@ plt.ylim(0, 1.3)
 
 
 # Filter the data
-sigma = 1.5
+sigma = sigma_x / dx
 smooth_data_1d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode='wrap')
 smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['reflect', 'wrap'])
 
