@@ -3,6 +3,11 @@
 #include <iomanip>
 #include <random>
 #include <chrono>
+#include <algorithm>
+
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 
 struct Vector
@@ -24,7 +29,9 @@ struct Photon
     Photon_status status;
 };
 
+
 double pow2(const double d) { return d*d; }
+
 
 double rayleigh(const double random_number)
 {
@@ -65,15 +72,21 @@ void reset_photon(
 
 void run_ray_tracer(const int n_photons)
 {
+    //// DEFINE INPUT ////
+    // Grid properties.
     const double dx_grid = 25.;
     const int itot = 256;
     const int ktot = 128;
 
-    const double surface_albedo = 0.2;
-
     const double x_size = itot*dx_grid;
     const double z_size = ktot*dx_grid;
 
+    // Radiation properties.
+    const double surface_albedo = 0.2;
+    const double zenith_angle = 50.*(M_PI/180.);
+    constexpr int n_photons_batch = 1 << 16;
+
+    // Input fields.
     const double k_ext_gas = 1.e-4; // 3.e-4;
     const double ssa_gas = 0.5;
     const double asy_gas = 0.;
@@ -82,17 +95,16 @@ void run_ray_tracer(const int n_photons)
     const double ssa_cloud = 0.9;
     const double asy_cloud = 0.85;
 
-    const double k_ext_null = k_ext_gas + k_ext_cloud;
-
-    // Input arrays.
+    // Create the spatial fields.
     std::vector<double> k_ext(itot*ktot);
     std::vector<double> ssa(itot*ktot);
     std::vector<double> asy(itot*ktot);
 
+    // First add the gases over the entire domain.
     std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
-    // Add a cloud
+    // Add a block cloud.
     for (int k=0; k<ktot; ++k)
         for (int i=0; i<itot; ++i)
         {
@@ -106,7 +118,11 @@ void run_ray_tracer(const int n_photons)
             }
         }
 
-    // Output arrays.
+    // Set the step size for the transport solver to the maximum extinction coefficient.
+    const double k_ext_null = *std::max_element(k_ext.begin(), k_ext.end());
+
+
+    //// PREPARE OUTPUT ARRAYS ////
     std::vector<unsigned int> surface_down_direct_count(itot);
     std::vector<unsigned int> surface_down_diffuse_count(itot);
     std::vector<unsigned int> surface_up_count(itot);
@@ -114,30 +130,28 @@ void run_ray_tracer(const int n_photons)
     std::vector<unsigned int> toa_up_count(itot);
     std::vector<unsigned int> atmos_count(itot*ktot);
 
-    const double zenith_angle = 50.*(M_PI/180.);
 
-    const int n_photons_batch = 1 << 16;
-
-    std::random_device rd;
+    //// RUN THE RAY TRACER ////
+    std::vector<Photon> photons(n_photons_batch);
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    std::vector<Photon> photons(n_photons_batch);
 
     #pragma omp parallel for
     for (int n=0; n<n_photons_batch; ++n)
     {
-        thread_local std::mt19937_64 mt(rd());
+        #ifdef _OPENMP
+        const int seed = omp_get_thread_num();
+        #else
+        const int seed = 0;
+        #endif
+
+        thread_local std::mt19937_64 mt(seed);
         std::uniform_real_distribution<double> dist(0., 1.);
 
         reset_photon(
                 photons[n],
                 dist(mt), x_size, z_size, zenith_angle);
-    }
 
-    #pragma omp parallel for
-    for (int n=0; n<n_photons_batch; ++n)
-    {
         const int i = photons[n].position.x / dx_grid;
         #pragma omp atomic
         ++toa_down_count[i];
@@ -154,7 +168,13 @@ void run_ray_tracer(const int n_photons)
         #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
         for (int n=0; n<n_photons_batch; ++n)
         {
-            thread_local std::mt19937_64 mt(rd());
+            #ifdef _OPENMP
+            const int seed = omp_get_thread_num();
+            #else
+            const int seed = 0;
+            #endif
+
+            thread_local std::mt19937_64 mt(seed);
             std::uniform_real_distribution<double> dist(0., 1.);
 
             while (true)
@@ -280,7 +300,13 @@ void run_ray_tracer(const int n_photons)
         #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
         for (int n=0; n<n_photons_batch; ++n)
         {
-            thread_local std::mt19937_64 mt(rd());
+            #ifdef _OPENMP
+            const int seed = omp_get_thread_num();
+            #else
+            const int seed = 0;
+            #endif
+
+            thread_local std::mt19937_64 mt(seed);
             std::uniform_real_distribution<double> dist(0., 1.);
 
             const int i = photons[n].position.x / dx_grid;
@@ -334,8 +360,10 @@ void run_ray_tracer(const int n_photons)
     auto end = std::chrono::high_resolution_clock::now();
     double duration = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
     std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
+    //// END RUNNING OF RAY TRACER ////
 
-    // Save the output to disk.
+
+    //// SAVE THE OUTPUT TO DISK ////
     auto save_binary = [](const std::string& name, void* ptr, const int size)
     {
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
