@@ -27,7 +27,7 @@ if(NOT HAS_CACHE)
         "Flags used by the CXX-compiler during debug build types." FORCE)
 
     message(STATUS "Build Type: " ${CMAKE_BUILD_TYPE})
-    set(HASCACHE TRUE CACHE BOOL "CMakeCache.txt created." FORCE)
+    set(HAS_CACHE TRUE CACHE BOOL "CMakeCache.txt created." FORCE)
 
     # Make sure that ccmake only contains build type.
     mark_as_advanced(HAS_CACHE)
