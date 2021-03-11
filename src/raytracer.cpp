@@ -72,7 +72,7 @@ void reset_photon(
 
 void run_ray_tracer(const int n_photons)
 {
-    bool USE_RAYTRACER_FROM_MENNO = false;
+    bool USE_OLD_RAYTRACER = false;
     //// DEFINE INPUT ////
     // Grid properties.
     const double dx_grid = 25.;
@@ -136,7 +136,7 @@ void run_ray_tracer(const int n_photons)
     std::vector<Photon> photons(n_photons_batch);
 
     auto start = std::chrono::high_resolution_clock::now();
-    if (USE_RAYTRACER_FROM_MENNO)
+    if (USE_OLD_RAYTRACER)
     {
         trace_ray(ktot,itot,z_size,x_size, k_ext.data(),ssa.data(),asy.data(),
             dx_grid,surface_albedo,zenith_angle,k_ext_gas,k_ext_null,n_photons,
@@ -386,7 +386,7 @@ void run_ray_tracer(const int n_photons)
         }
     };
     
-    if (USE_RAYTRACER_FROM_MENNO)
+    if (USE_OLD_RAYTRACER)
     {
         save_binary("surface_down_direct_old", surface_down_direct_count.data(), itot);
         save_binary("surface_down_diffuse_old", surface_down_diffuse_count.data(), itot);        
