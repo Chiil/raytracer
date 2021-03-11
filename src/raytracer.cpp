@@ -177,16 +177,12 @@ void run_ray_tracer(const int n_photons)
     for (int n=0; n<n_photons_batch; ++n)
     {
         #ifdef _OPENMP
-        const int seed = omp_get_thread_num();
+        static thread_local Random_number_generator rg(omp_get_thread_num());
         #else
-        const int seed = 0;
+        static thread_local Random_number_generator rg(0);
         #endif
 
-        thread_local static Random_number_generator rg(seed);
-
-        reset_photon(
-                photons[n],
-                rg.fp64(), x_size, z_size, zenith_angle);
+        reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
         const int i = photons[n].position.x / dx_grid;
         #pragma omp atomic
@@ -205,12 +201,10 @@ void run_ray_tracer(const int n_photons)
         for (int n=0; n<n_photons_batch; ++n)
         {
             #ifdef _OPENMP
-            const int seed = omp_get_thread_num();
+            static thread_local Random_number_generator rg(omp_get_thread_num());
             #else
-            const int seed = 0;
+            static thread_local Random_number_generator rg(0);
             #endif
-
-            thread_local static Random_number_generator rg(seed);
 
             while (true)
             {
@@ -337,12 +331,10 @@ void run_ray_tracer(const int n_photons)
         for (int n=0; n<n_photons_batch; ++n)
         {
             #ifdef _OPENMP
-            const int seed = omp_get_thread_num();
+            static thread_local Random_number_generator rg(omp_get_thread_num());
             #else
-            const int seed = 0;
+            static thread_local Random_number_generator rg(0);
             #endif
-
-            thread_local static Random_number_generator rg(seed);
 
             const int i = photons[n].position.x / dx_grid;
             const int k = photons[n].position.z / dx_grid;
