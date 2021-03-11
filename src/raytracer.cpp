@@ -30,13 +30,23 @@ uint64_t next(uint64_t* __restrict__ s)
 }
 
 
+uint64_t next_sr64(uint64_t& s)
+{
+	uint64_t z = (s += 0x9e3779b97f4a7c15);
+	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+	return z ^ (z >> 31);
+}
+
+
 class Random_number_generator
 {
     public:
         Random_number_generator(const int seed)
         {
-            state[0] = 100 + seed;
-            state[1] = 662 + seed;
+            uint64_t init_state = seed;
+            state[0] = next_sr64(init_state);
+            state[1] = next_sr64(init_state);
         };
 
         inline double fp64() { return (next(state) >> 11) * 0x1.0p-53; }
