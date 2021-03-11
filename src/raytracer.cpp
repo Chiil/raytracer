@@ -10,6 +10,43 @@
 #endif
 
 
+inline uint64_t rotl(const uint64_t x, int k)
+{
+	return (x << k) | (x >> (64 - k));
+}
+
+
+uint64_t next(uint64_t* __restrict__ s)
+{
+    const uint64_t s0 = s[0];
+    uint64_t s1 = s[1];
+    const uint64_t result = s0 + s1;
+
+    s1 ^= s0;
+    s[0] = rotl(s0, 24) ^ s1 ^ (s1 << 16);
+    s[1] = rotl(s1, 37);
+
+    return result;
+}
+
+
+class Random_number_generator
+{
+    public:
+        Random_number_generator(const int seed)
+        {
+            state[0] = 100 + seed;
+            state[1] = 662 + seed;
+        };
+
+        inline double fp64() { return (next(state) >> 11) * 0x1.0p-53; }
+        inline int sign() { return (-1 + 2*int(next(state) >> 63)); }
+
+    private:
+        uint64_t state[2];
+};
+
+
 struct Vector
 {
     double x;
@@ -53,7 +90,7 @@ double henyey(const double g, const double random_number)
 
 double sample_tau(const double random_number)
 {
-    return -1.*std::log(-random_number + 1.);
+    return -1.*std::log(-random_number + 1.) + std::numeric_limits<double>::epsilon();
 }
 
 
@@ -145,12 +182,11 @@ void run_ray_tracer(const int n_photons)
         const int seed = 0;
         #endif
 
-        thread_local std::mt19937_64 mt(seed);
-        std::uniform_real_distribution<double> dist(0., 1.);
+        thread_local static Random_number_generator rg(seed);
 
         reset_photon(
                 photons[n],
-                dist(mt), x_size, z_size, zenith_angle);
+                rg.fp64(), x_size, z_size, zenith_angle);
 
         const int i = photons[n].position.x / dx_grid;
         #pragma omp atomic
@@ -174,12 +210,11 @@ void run_ray_tracer(const int n_photons)
             const int seed = 0;
             #endif
 
-            thread_local std::mt19937_64 mt(seed);
-            std::uniform_real_distribution<double> dist(0., 1.);
+            thread_local static Random_number_generator rg(seed);
 
             while (true)
             {
-                const double dn = sample_tau(dist(mt)) / k_ext_null;
+                const double dn = sample_tau(rg.fp64()) / k_ext_null;
                 double dx = photons[n].direction.x * dn;
                 double dz = photons[n].direction.z * dn;
 
@@ -234,23 +269,24 @@ void run_ray_tracer(const int n_photons)
                     }
 
                     // Scatter if smaller than albedo, otherwise absorb
-                    if (dist(mt) <= surface_albedo)
+                    if (rg.fp64() <= surface_albedo)
                     {
                         if (photons[n].status == Photon_status::Enabled)
                         {
                             --n_photons_out;
+
                             #pragma omp atomic
                             ++surface_up_count[i];
                         }
 
-                        const double mu_surface = sqrt(dist(mt));
+                        const double mu_surface = sqrt(rg.fp64());
                         photons[n].direction.x = mu_surface;
-                        photons[n].direction.z = std::sin(std::acos(mu_surface) * int(-1.+2.*(dist(mt) > .5)));
+                        photons[n].direction.z = std::sin(std::acos(mu_surface) * rg.sign());
                         photons[n].kind = Photon_kind::Diffuse;
                     }
                     else
                     {
-                        reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+                        reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
                         if (photon_generation_completed)
                             photons[n].status = Photon_status::Disabled;
@@ -275,7 +311,7 @@ void run_ray_tracer(const int n_photons)
                         ++toa_up_count[i];
                     }
 
-                    reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+                    reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
                     if (photon_generation_completed)
                         photons[n].status = Photon_status::Disabled;
@@ -306,13 +342,12 @@ void run_ray_tracer(const int n_photons)
             const int seed = 0;
             #endif
 
-            thread_local std::mt19937_64 mt(seed);
-            std::uniform_real_distribution<double> dist(0., 1.);
+            thread_local static Random_number_generator rg(seed);
 
             const int i = photons[n].position.x / dx_grid;
             const int k = photons[n].position.z / dx_grid;
 
-            const double random_number = dist(mt);
+            const double random_number = rg.fp64();
 
             // Null collision.
             if (random_number >= (k_ext[i + k*itot] / k_ext_null))
@@ -321,9 +356,9 @@ void run_ray_tracer(const int n_photons)
             // Scattering.
             else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
             {
-                const bool cloud_scatter = dist(mt) < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
-                const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], dist(mt)) : rayleigh(dist(mt));
-                const double angle = (-1.+2.*(dist(mt)>.5)) * std::acos(mu_scat)
+                const bool cloud_scatter = rg.fp64() < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
+                const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], rg.fp64()) : rayleigh(rg.fp64());
+                const double angle = rg.sign() * std::acos(mu_scat)
                     + std::atan2(photons[n].direction.x, photons[n].direction.z);
 
                 photons[n].direction.x = std::sin(angle);
@@ -336,11 +371,12 @@ void run_ray_tracer(const int n_photons)
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     ++n_photons_out;
+
                     #pragma omp atomic
                     ++atmos_count[i + k*itot];
                 }
 
-                reset_photon(photons[n], dist(mt), x_size, z_size, zenith_angle);
+                reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
                 if (photon_generation_completed)
                     photons[n].status = Photon_status::Disabled;
