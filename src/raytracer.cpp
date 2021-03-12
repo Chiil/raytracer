@@ -284,8 +284,8 @@ void run_ray_tracer(const int n_photons)
                         }
 
                         const double mu_surface = std::sqrt(rg.fp64());
-                        photons[n].direction.x = std::sqrt(1. - mu_surface*mu_surface)*rg.sign<double>();
-                        photons[n].direction.z = mu_surface;
+                        photons[n].direction.x = mu_surface*rg.sign<double>();
+                        photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
                         photons[n].kind = Photon_kind::Diffuse;
                     }
                     else
