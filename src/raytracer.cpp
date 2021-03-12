@@ -50,7 +50,7 @@ class Random_number_generator
         };
 
         inline double fp64() { return (next(state) >> 11) * 0x1.0p-53; }
-        inline int sign() { return (-1 + 2*int(next(state) >> 63)); }
+        template<typename T> inline int sign() { return static_cast<T>(-1 + 2*int(next(state) >> 63)); }
 
     private:
         uint64_t state[2];
@@ -284,7 +284,7 @@ void run_ray_tracer(const int n_photons)
                         }
 
                         const double mu_surface = std::sqrt(rg.fp64());
-                        photons[n].direction.x = std::sqrt(1. - mu_surface*mu_surface)*rg.sign();
+                        photons[n].direction.x = std::sqrt(1. - mu_surface*mu_surface)*rg.sign<double>();
                         photons[n].direction.z = mu_surface;
                         photons[n].kind = Photon_kind::Diffuse;
                     }
@@ -360,7 +360,7 @@ void run_ray_tracer(const int n_photons)
             {
                 const bool cloud_scatter = rg.fp64() < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
                 const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], rg.fp64()) : rayleigh(rg.fp64());
-                const double angle = rg.sign() * std::acos(mu_scat)
+                const double angle = rg.sign<double>() * std::acos(mu_scat)
                     + std::atan2(photons[n].direction.x, photons[n].direction.z);
 
                 photons[n].direction.x = std::sin(angle);
