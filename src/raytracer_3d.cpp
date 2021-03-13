@@ -121,8 +121,8 @@ void reset_photon(
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
     photon.position.z = z_size;
-    photon.direction.x = -std::sin(zenith_angle);
-    photon.direction.y = -std::sin(zenith_angle);
+    photon.direction.x = -std::sin(zenith_angle)*std::cos(azimuth_angle);
+    photon.direction.y = -std::sin(zenith_angle)*std::sin(azimuth_angle);
     photon.direction.z = -std::cos(zenith_angle);
     photon.kind = Photon_kind::Direct;
     photon.status = Photon_status::Enabled;
