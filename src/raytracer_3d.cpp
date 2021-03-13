@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <chrono>
 #include <cmath>
+#include <vector>
 #include <algorithm>
 
 #ifdef _OPENMP
@@ -171,9 +172,9 @@ void run_ray_tracer(const uint64_t n_photons)
         for (int j=0; j<jtot; ++j)
             for (int i=0; i<itot; ++i)
             {
-                if (  i*dx_grid > 2700. && i*dx_grid < 3700.
-                   && j*dx_grid > 2700. && k*dx_grid < 3700.
-                   && k*dx_grid > 1000. && k*dx_grid < 1500.)
+                if (  (i+0.5)*dx_grid > 2700. && (i+0.5)*dx_grid < 3700.
+                   && (j+0.5)*dx_grid > 2700. && (j+0.5)*dx_grid < 3700.
+                   && (k+0.5)*dx_grid > 1000. && (k+0.5)*dx_grid < 1500.)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
                     k_ext[ijk] = k_ext_gas + k_ext_cloud;
@@ -241,6 +242,7 @@ void run_ray_tracer(const uint64_t n_photons)
                 {
                     const double dn = sample_tau(rg.fp64()) / k_ext_null;
                     double dx = photons[n].direction.x * dn;
+                    double dy = photons[n].direction.y * dn;
                     double dz = photons[n].direction.z * dn;
 
                     bool surface_exit = false;
@@ -250,6 +252,7 @@ void run_ray_tracer(const uint64_t n_photons)
                     {
                         const double fac = std::abs(photons[n].position.z / dz);
                         dx *= fac;
+                        dy *= fac;
                         dz *= fac;
 
                         surface_exit = true;
@@ -258,18 +261,25 @@ void run_ray_tracer(const uint64_t n_photons)
                     {
                         const double fac = std::abs((z_size - photons[n].position.z) / dz);
                         dx *= fac;
+                        dy *= fac;
                         dz *= fac;
 
                         toa_exit = true;
                     }
 
                     photons[n].position.x += dx;
+                    photons[n].position.y += dy;
                     photons[n].position.z += dz;
 
                     // Cyclic boundary condition in x.
                     photons[n].position.x = std::fmod(photons[n].position.x, x_size);
                     if (photons[n].position.x < 0.)
                         photons[n].position.x += x_size;
+
+                    // Cyclic boundary condition in y.
+                    photons[n].position.y = std::fmod(photons[n].position.y, y_size);
+                    if (photons[n].position.y < 0.)
+                        photons[n].position.y += y_size;
 
                     // Handle the surface and top exits.
                     const int i = photons[n].position.x / dx_grid;
@@ -295,7 +305,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             ++surface_down_diffuse_count[ij];
                         }
 
-                        // Scatter if smaller than albedo, otherwise absorb
+                        // Surface scatter if smaller than albedo, otherwise absorb
                         if (rg.fp64() <= surface_albedo)
                         {
                             if (photons[n].status == Photon_status::Enabled)
@@ -307,7 +317,10 @@ void run_ray_tracer(const uint64_t n_photons)
                             }
 
                             const double mu_surface = std::sqrt(rg.fp64());
-                            photons[n].direction.x = mu_surface*rg.sign<double>();
+                            const double azimuth_surface = 2.*M_PI*rg.fp64();
+                            // CvH: is this correct?
+                            photons[n].direction.x = mu_surface*rg.sign<double>()*std::sin(azimuth_surface);
+                            photons[n].direction.y = mu_surface*rg.sign<double>()*std::cos(azimuth_surface);
                             photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
                             photons[n].kind = Photon_kind::Diffuse;
                         }
@@ -358,8 +371,9 @@ void run_ray_tracer(const uint64_t n_photons)
 
                             const int i_new = photons[n].position.x / dx_grid;
                             const int j_new = photons[n].position.y / dx_grid;
+                            const int ij_new = i_new + j_new*itot;
                             #pragma omp atomic
-                            ++toa_down_count[i_new + j_new*itot];
+                            ++toa_down_count[ij_new];
                         }
                     }
                     else
@@ -394,6 +408,7 @@ void run_ray_tracer(const uint64_t n_photons)
                         + std::atan2(photons[n].direction.x, photons[n].direction.z);
 
                     photons[n].direction.x = std::sin(angle);
+                    photons[n].direction.y = std::sin(angle);
                     photons[n].direction.z = std::cos(angle);
                     photons[n].kind = Photon_kind::Diffuse;
                 }
