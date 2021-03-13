@@ -46,3 +46,4 @@ endif()
 
 
 add_executable(raytracer src/raytracer.cpp)
+add_executable(raytracer_3d src/raytracer_3d.cpp)
