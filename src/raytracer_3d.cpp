@@ -136,7 +136,7 @@ void run_ray_tracer(const uint64_t n_photons)
     const double dx_grid = 50.;
     const int itot = 128;
     const int jtot = 128;
-    const int ktot = 128;
+    const int ktot = 64;
 
     const double x_size = itot*dx_grid;
     const double y_size = jtot*dx_grid;

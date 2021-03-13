@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 # Set the grid and load the data.
 itot = 128
 jtot = 128
-ktot = 128
+ktot = 64
 dx = 50
 sigma_x = 40
 
