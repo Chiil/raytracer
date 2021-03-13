@@ -99,15 +99,24 @@ toa_up_filtered = smooth_data_2d(toa_up)
 atmos_filtered = smooth_data_3d(atmos)
 
 
-"""
+
 # Plot the filtered data.
 plt.figure()
-plt.pcolormesh(x, z, atmos_filtered, shading='nearest',
+plt.pcolormesh(x, z, atmos_filtered[:, jtot//2, :], shading='nearest',
         cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
 plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
-"""
+plt.title('atmos_filtered')
+
+plt.figure()
+plt.pcolormesh(x, y, surface_down, shading='nearest',
+        cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
+plt.colorbar()
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('surface_down_filtered')
+
 
 plt.figure()
 if plot_raw_data:
