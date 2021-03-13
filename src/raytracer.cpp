@@ -16,7 +16,9 @@ inline uint64_t rotl(const uint64_t x, int k)
 }
 
 
-uint64_t next(uint64_t* __restrict__ s)
+// This is the xoroshiro128+ generator of Blackman and Vigna.
+// It has a uint64_t[2] as state.
+inline uint64_t next_xoroshiro_128_plus(uint64_t* __restrict__ s)
 {
     const uint64_t s0 = s[0];
     uint64_t s1 = s[1];
@@ -30,11 +32,15 @@ uint64_t next(uint64_t* __restrict__ s)
 }
 
 
-uint64_t next_sr64(uint64_t& s)
+// This is SplitMix64, a separate RNG to inialize the xo_ RNG.
+// It has a single uint64_t as state.
+inline uint64_t next_sr64(uint64_t& s)
 {
 	uint64_t z = (s += 0x9e3779b97f4a7c15);
+
 	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
 	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+
 	return z ^ (z >> 31);
 }
 
@@ -45,6 +51,7 @@ class Random_number_generator
         Random_number_generator(const int seed)
         {
             uint64_t init_state = seed;
+
             state[0] = next_sr64(init_state);
             state[1] = next_sr64(init_state);
         };
@@ -202,7 +209,7 @@ void run_ray_tracer(const int n_photons)
     int n_photons_in = n_photons_batch;
     int n_photons_out = 0;
 
-    while ( (n_photons_in < n_photons) || (n_photons_in > n_photons_out))
+    while ((n_photons_in < n_photons) || (n_photons_in > n_photons_out))
     {
         const bool photon_generation_completed = n_photons_in >= n_photons;
 
