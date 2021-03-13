@@ -124,7 +124,7 @@ void reset_photon(
 }
 
 
-void run_ray_tracer(const int n_photons)
+void run_ray_tracer(const uint64_t n_photons)
 {
     //// DEFINE INPUT ////
     // Grid properties.
@@ -177,12 +177,12 @@ void run_ray_tracer(const int n_photons)
 
 
     //// PREPARE OUTPUT ARRAYS ////
-    std::vector<unsigned int> surface_down_direct_count(itot);
-    std::vector<unsigned int> surface_down_diffuse_count(itot);
-    std::vector<unsigned int> surface_up_count(itot);
-    std::vector<unsigned int> toa_down_count(itot);
-    std::vector<unsigned int> toa_up_count(itot);
-    std::vector<unsigned int> atmos_count(itot*ktot);
+    std::vector<uint64_t> surface_down_direct_count(itot);
+    std::vector<uint64_t> surface_down_diffuse_count(itot);
+    std::vector<uint64_t> surface_up_count(itot);
+    std::vector<uint64_t> toa_down_count(itot);
+    std::vector<uint64_t> toa_up_count(itot);
+    std::vector<uint64_t> atmos_count(itot*ktot);
 
 
     //// RUN THE RAY TRACER ////
@@ -190,8 +190,8 @@ void run_ray_tracer(const int n_photons)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    int n_photons_in = n_photons_batch;
-    int n_photons_out = 0;
+    uint64_t n_photons_in = n_photons_batch;
+    uint64_t n_photons_out = 0;
 
     #pragma omp parallel
     {
@@ -405,7 +405,7 @@ void run_ray_tracer(const int n_photons)
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
 
         if (binary_file)
-            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(unsigned int));
+            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(uint64_t));
         else
         {
             std::string error = "Cannot write file \"" + name + ".bin\"";
@@ -430,7 +430,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    const int n_photons = std::stoi(argv[1]) * 100000;
+    const uint64_t n_photons = std::stoi(argv[1]) * 100000;
 
     run_ray_tracer(n_photons);
 

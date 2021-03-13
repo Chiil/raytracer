@@ -14,18 +14,18 @@ plot_raw_data = True
 x = np.arange(0.5*dx, itot*dx, dx)
 z = np.arange(0.5*dx, ktot*dx, dx)
 
-surface_down_direct = np.fromfile('surface_down_direct.bin', dtype=np.uint32)
-surface_down_diffuse = np.fromfile('surface_down_diffuse.bin', dtype=np.uint32)
+surface_down_direct = np.fromfile('surface_down_direct.bin', dtype=np.uint64)
+surface_down_diffuse = np.fromfile('surface_down_diffuse.bin', dtype=np.uint64)
 surface_down = surface_down_direct + surface_down_diffuse
-surface_up = np.fromfile('surface_up.bin', dtype=np.uint32)
-toa_up = np.fromfile('toa_up.bin', dtype=np.uint32)
-toa_down = np.fromfile('toa_down.bin', dtype=np.uint32)
-atmos = np.fromfile('atmos.bin', dtype=np.uint32).reshape((ktot, itot))
+surface_up = np.fromfile('surface_up.bin', dtype=np.uint64)
+toa_up = np.fromfile('toa_up.bin', dtype=np.uint64)
+toa_down = np.fromfile('toa_down.bin', dtype=np.uint64)
+atmos = np.fromfile('atmos.bin', dtype=np.uint64).reshape((ktot, itot))
 
 
 # Check the photon balance.
-balance_in = np.int32(toa_down.sum())
-balance_out = np.int32(
+balance_in = np.int64(toa_down.sum())
+balance_out = np.int64(
         surface_down.sum() - surface_up.sum() + toa_up.sum() + atmos.sum())
 balance_net = balance_in - balance_out
 
