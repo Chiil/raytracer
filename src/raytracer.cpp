@@ -56,8 +56,8 @@ class Random_number_generator
             state[1] = next_sr64(init_state);
         };
 
-        inline double fp64() { return (next(state) >> 11) * 0x1.0p-53; }
-        template<typename T> inline int sign() { return static_cast<T>(-1 + 2*int(next(state) >> 63)); }
+        inline double fp64() { return (next_xoroshiro_128_plus(state) >> 11) * 0x1.0p-53; }
+        template<typename T> inline int sign() { return static_cast<T>(-1 + 2*int(next_xoroshiro_128_plus(state) >> 63)); }
 
     private:
         uint64_t state[2];
