@@ -144,7 +144,7 @@ void run_ray_tracer(const uint64_t n_photons)
 
     // Radiation properties.
     const double surface_albedo = 0.2;
-    const double zenith_angle = 50.*(M_PI/180.);
+    const double zenith_angle = 40.*(M_PI/180.);
     const double azimuth_angle = 20.*(M_PI/180.);
     constexpr int n_photons_batch = 1 << 16;
 
@@ -171,8 +171,8 @@ void run_ray_tracer(const uint64_t n_photons)
         for (int j=0; j<jtot; ++j)
             for (int i=0; i<itot; ++i)
             {
-                if (  i*dx_grid > 4000. && i*dx_grid < 5000.
-                   && j*dx_grid > 4000. && k*dx_grid < 5000.
+                if (  i*dx_grid > 2700. && i*dx_grid < 3700.
+                   && j*dx_grid > 2700. && k*dx_grid < 3700.
                    && k*dx_grid > 1000. && k*dx_grid < 1500.)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
@@ -223,8 +223,10 @@ void run_ray_tracer(const uint64_t n_photons)
 
             const int i = photons[n].position.x / dx_grid;
             const int j = photons[n].position.y / dx_grid;
+            const int ij = i + j*itot;
+
             #pragma omp atomic
-            ++toa_down_count[i + j*itot];
+            ++toa_down_count[ij];
         }
 
         while ((n_photons_in < n_photons) || (n_photons_in > n_photons_out))
@@ -272,6 +274,7 @@ void run_ray_tracer(const uint64_t n_photons)
                     // Handle the surface and top exits.
                     const int i = photons[n].position.x / dx_grid;
                     const int j = photons[n].position.y / dx_grid;
+                    const int ij = i + j*itot;
 
                     if (surface_exit)
                     {
@@ -281,7 +284,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             ++n_photons_out;
 
                             #pragma omp atomic
-                            ++surface_down_direct_count[i + j*itot];
+                            ++surface_down_direct_count[ij];
                         }
                         else if (photons[n].kind == Photon_kind::Diffuse
                                 && photons[n].status == Photon_status::Enabled)
@@ -289,7 +292,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             ++n_photons_out;
 
                             #pragma omp atomic
-                            ++surface_down_diffuse_count[i + j*itot];
+                            ++surface_down_diffuse_count[ij];
                         }
 
                         // Scatter if smaller than albedo, otherwise absorb
@@ -300,7 +303,7 @@ void run_ray_tracer(const uint64_t n_photons)
                                 --n_photons_out;
 
                                 #pragma omp atomic
-                                ++surface_up_count[i + j*itot];
+                                ++surface_up_count[ij];
                             }
 
                             const double mu_surface = std::sqrt(rg.fp64());
@@ -324,8 +327,9 @@ void run_ray_tracer(const uint64_t n_photons)
 
                                 const int i_new = photons[n].position.x / dx_grid;
                                 const int j_new = photons[n].position.y / dx_grid;
+                                const int ij_new = i_new + j_new*itot;
                                 #pragma omp atomic
-                                ++toa_down_count[i_new + j_new*itot];
+                                ++toa_down_count[ij_new];
                             }
                         }
                     }
@@ -336,7 +340,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             ++n_photons_out;
 
                             #pragma omp atomic
-                            ++toa_up_count[i];
+                            ++toa_up_count[ij];
                         }
 
                         reset_photon(
@@ -373,17 +377,19 @@ void run_ray_tracer(const uint64_t n_photons)
                 const int j = photons[n].position.y / dx_grid;
                 const int k = photons[n].position.z / dx_grid;
 
+                const int ijk = i + j*itot + k*itot*jtot;
+
                 const double random_number = rg.fp64();
 
                 // Null collision.
-                if (random_number >= (k_ext[i + k*itot] / k_ext_null))
+                if (random_number >= (k_ext[ijk] / k_ext_null))
                 {
                 }
                 // Scattering.
-                else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
+                else if (random_number <= ssa[ijk] * k_ext[ijk] / k_ext_null)
                 {
-                    const bool cloud_scatter = rg.fp64() < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
-                    const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], rg.fp64()) : rayleigh(rg.fp64());
+                    const bool cloud_scatter = rg.fp64() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
+                    const double mu_scat = cloud_scatter ? henyey(asy[ijk], rg.fp64()) : rayleigh(rg.fp64());
                     const double angle = rg.sign<double>() * std::acos(mu_scat)
                         + std::atan2(photons[n].direction.x, photons[n].direction.z);
 
@@ -399,7 +405,7 @@ void run_ray_tracer(const uint64_t n_photons)
                         ++n_photons_out;
 
                         #pragma omp atomic
-                        ++atmos_count[i + j*itot + k*itot*jtot];
+                        ++atmos_count[ijk];
                     }
 
                     reset_photon(
@@ -416,8 +422,9 @@ void run_ray_tracer(const uint64_t n_photons)
 
                         const int i_new = photons[n].position.x / dx_grid;
                         const int j_new = photons[n].position.y / dx_grid;
+                        const int ij_new = i_new + j_new*itot;
                         #pragma omp atomic
-                        ++toa_down_count[i_new + j_new*itot];
+                        ++toa_down_count[ij_new];
                     }
                 }
             }
