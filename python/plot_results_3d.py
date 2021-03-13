@@ -85,21 +85,21 @@ plt.ylabel('normalized irradiance (-)')
 plt.ylim(0, 1.3)
 
 
-"""
 # Filter the data
 sigma = sigma_x / dx
-smooth_data_1d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode='wrap')
-smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['reflect', 'wrap'])
+smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['wrap', 'wrap'])
+smooth_data_3d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['reflect', 'wrap', 'wrap'])
 
-surface_down_filtered = smooth_data_1d(surface_down)
-surface_down_direct_filtered = smooth_data_1d(surface_down_direct)
-surface_down_diffuse_filtered = smooth_data_1d(surface_down_diffuse)
-surface_up_filtered = smooth_data_1d(surface_up)
-toa_down_filtered = smooth_data_1d(toa_down)
-toa_up_filtered = smooth_data_1d(toa_up)
-atmos_filtered = smooth_data_2d(atmos)
+surface_down_filtered = smooth_data_2d(surface_down)
+surface_down_direct_filtered = smooth_data_2d(surface_down_direct)
+surface_down_diffuse_filtered = smooth_data_2d(surface_down_diffuse)
+surface_up_filtered = smooth_data_2d(surface_up)
+toa_down_filtered = smooth_data_2d(toa_down)
+toa_up_filtered = smooth_data_2d(toa_up)
+atmos_filtered = smooth_data_3d(atmos)
 
 
+"""
 # Plot the filtered data.
 plt.figure()
 plt.pcolormesh(x, z, atmos_filtered, shading='nearest',
@@ -107,27 +107,27 @@ plt.pcolormesh(x, z, atmos_filtered, shading='nearest',
 plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
+"""
 
 plt.figure()
 if plot_raw_data:
-    plt.plot(x, surface_down, 'k:', linewidth=0.8, alpha=0.5)
-    plt.plot(x, surface_down_direct, 'k:', linewidth=0.8, alpha=0.5)
-    plt.plot(x, surface_down_diffuse, 'k:', linewidth=0.8, alpha=0.5)
-    plt.plot(x, surface_up, 'k:', linewidth=0.8, alpha=0.5)
-    plt.plot(x, toa_down, 'k:', linewidth=0.8, alpha=0.5)
-    plt.plot(x, toa_up, 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, surface_down[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, surface_down_direct[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, surface_down_diffuse[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, surface_up[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, toa_down[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
+    plt.plot(x, toa_up[jtot//2, :], 'k:', linewidth=0.8, alpha=0.5)
 
-plt.plot(x, surface_down_filtered, 'C0-', label='surf_dn')
-plt.plot(x, surface_down_direct_filtered, 'C0--', label='surf_dn_dir')
-plt.plot(x, surface_down_diffuse_filtered, 'C0:', label='surf_dn_dif')
-plt.plot(x, surface_up_filtered, 'C1-', label='surf_up')
-plt.plot(x, toa_down_filtered, 'C2-', label='toa_dn')
-plt.plot(x, toa_up_filtered, 'C3-', label='toa_up')
+plt.plot(x, surface_down_filtered[jtot//2, :], 'C0-', label='surf_dn')
+plt.plot(x, surface_down_direct_filtered[jtot//2, :], 'C0--', label='surf_dn_dir')
+plt.plot(x, surface_down_diffuse_filtered[jtot//2, :], 'C0:', label='surf_dn_dif')
+plt.plot(x, surface_up_filtered[jtot//2, :], 'C1-', label='surf_up')
+plt.plot(x, toa_down_filtered[jtot//2, :], 'C2-', label='toa_dn')
+plt.plot(x, toa_up_filtered[jtot//2, :], 'C3-', label='toa_up')
 
 plt.legend(loc=0, ncol=3)
 plt.xlabel('x (m)')
 plt.ylabel('normalized irradiance (-)')
 plt.ylim(0, 1.3)
 
-"""
 plt.show()
