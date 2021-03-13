@@ -190,113 +190,134 @@ void run_ray_tracer(const int n_photons)
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    #pragma omp parallel for
-    for (int n=0; n<n_photons_batch; ++n)
-    {
-        #ifdef _OPENMP
-        static thread_local Random_number_generator rg(omp_get_thread_num());
-        #else
-        static thread_local Random_number_generator rg(0);
-        #endif
-
-        reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
-
-        const int i = photons[n].position.x / dx_grid;
-        #pragma omp atomic
-        ++toa_down_count[i];
-    }
-
     int n_photons_in = n_photons_batch;
     int n_photons_out = 0;
 
-    while ((n_photons_in < n_photons) || (n_photons_in > n_photons_out))
+    #pragma omp parallel
     {
-        const bool photon_generation_completed = n_photons_in >= n_photons;
+        #ifdef _OPENMP
+        Random_number_generator rg(omp_get_thread_num());
+        #else
+        Random_number_generator rg(static_cast<uint64_t>(3849284923));
+        #endif
 
-        // Transport the photons
-        #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
+        #pragma omp for
         for (int n=0; n<n_photons_batch; ++n)
         {
-            #ifdef _OPENMP
-            static thread_local Random_number_generator rg(omp_get_thread_num());
-            #else
-            static thread_local Random_number_generator rg(0);
-            #endif
+            reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
-            while (true)
+            const int i = photons[n].position.x / dx_grid;
+            #pragma omp atomic
+            ++toa_down_count[i];
+        }
+
+        while ((n_photons_in < n_photons) || (n_photons_in > n_photons_out))
+        {
+            const bool photon_generation_completed = n_photons_in >= n_photons;
+
+            // Transport the photons
+            #pragma omp for reduction(+:n_photons_in) reduction(+:n_photons_out)
+            for (int n=0; n<n_photons_batch; ++n)
             {
-                const double dn = sample_tau(rg.fp64()) / k_ext_null;
-                double dx = photons[n].direction.x * dn;
-                double dz = photons[n].direction.z * dn;
-
-                bool surface_exit = false;
-                bool toa_exit = false;
-
-                if ((photons[n].position.z + dz) <= 0.)
+                while (true)
                 {
-                    const double fac = std::abs(photons[n].position.z / dz);
-                    dx *= fac;
-                    dz *= fac;
+                    const double dn = sample_tau(rg.fp64()) / k_ext_null;
+                    double dx = photons[n].direction.x * dn;
+                    double dz = photons[n].direction.z * dn;
 
-                    surface_exit = true;
-                }
-                else if ((photons[n].position.z + dz) >= z_size)
-                {
-                    const double fac = std::abs((z_size - photons[n].position.z) / dz);
-                    dx *= fac;
-                    dz *= fac;
+                    bool surface_exit = false;
+                    bool toa_exit = false;
 
-                    toa_exit = true;
-                }
-
-                photons[n].position.x += dx;
-                photons[n].position.z += dz;
-
-                // Cyclic boundary condition in x.
-                photons[n].position.x = std::fmod(photons[n].position.x, x_size);
-                if (photons[n].position.x < 0.)
-                    photons[n].position.x += x_size;
-
-                // Handle the surface and top exits.
-                const int i = photons[n].position.x / dx_grid;
-
-                if (surface_exit)
-                {
-                    if (photons[n].kind == Photon_kind::Direct
-                            && photons[n].status == Photon_status::Enabled)
+                    if ((photons[n].position.z + dz) <= 0.)
                     {
-                        ++n_photons_out;
+                        const double fac = std::abs(photons[n].position.z / dz);
+                        dx *= fac;
+                        dz *= fac;
 
-                        #pragma omp atomic
-                        ++surface_down_direct_count[i];
+                        surface_exit = true;
                     }
-                    else if (photons[n].kind == Photon_kind::Diffuse
-                            && photons[n].status == Photon_status::Enabled)
+                    else if ((photons[n].position.z + dz) >= z_size)
                     {
-                        ++n_photons_out;
+                        const double fac = std::abs((z_size - photons[n].position.z) / dz);
+                        dx *= fac;
+                        dz *= fac;
 
-                        #pragma omp atomic
-                        ++surface_down_diffuse_count[i];
+                        toa_exit = true;
                     }
 
-                    // Scatter if smaller than albedo, otherwise absorb
-                    if (rg.fp64() <= surface_albedo)
+                    photons[n].position.x += dx;
+                    photons[n].position.z += dz;
+
+                    // Cyclic boundary condition in x.
+                    photons[n].position.x = std::fmod(photons[n].position.x, x_size);
+                    if (photons[n].position.x < 0.)
+                        photons[n].position.x += x_size;
+
+                    // Handle the surface and top exits.
+                    const int i = photons[n].position.x / dx_grid;
+
+                    if (surface_exit)
+                    {
+                        if (photons[n].kind == Photon_kind::Direct
+                                && photons[n].status == Photon_status::Enabled)
+                        {
+                            ++n_photons_out;
+
+                            #pragma omp atomic
+                            ++surface_down_direct_count[i];
+                        }
+                        else if (photons[n].kind == Photon_kind::Diffuse
+                                && photons[n].status == Photon_status::Enabled)
+                        {
+                            ++n_photons_out;
+
+                            #pragma omp atomic
+                            ++surface_down_diffuse_count[i];
+                        }
+
+                        // Scatter if smaller than albedo, otherwise absorb
+                        if (rg.fp64() <= surface_albedo)
+                        {
+                            if (photons[n].status == Photon_status::Enabled)
+                            {
+                                --n_photons_out;
+
+                                #pragma omp atomic
+                                ++surface_up_count[i];
+                            }
+
+                            const double mu_surface = std::sqrt(rg.fp64());
+                            photons[n].direction.x = mu_surface*rg.sign<double>();
+                            photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
+                            photons[n].kind = Photon_kind::Diffuse;
+                        }
+                        else
+                        {
+                            reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
+
+                            if (photon_generation_completed)
+                                photons[n].status = Photon_status::Disabled;
+
+                            if (photons[n].status == Photon_status::Enabled)
+                            {
+                                ++n_photons_in;
+
+                                const int i_new = photons[n].position.x / dx_grid;
+                                #pragma omp atomic
+                                ++toa_down_count[i_new];
+                            }
+                        }
+                    }
+                    else if (toa_exit)
                     {
                         if (photons[n].status == Photon_status::Enabled)
                         {
-                            --n_photons_out;
+                            ++n_photons_out;
 
                             #pragma omp atomic
-                            ++surface_up_count[i];
+                            ++toa_up_count[i];
                         }
 
-                        const double mu_surface = std::sqrt(rg.fp64());
-                        photons[n].direction.x = mu_surface*rg.sign<double>();
-                        photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
-                        photons[n].kind = Photon_kind::Diffuse;
-                    }
-                    else
-                    {
                         reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
 
                         if (photon_generation_completed)
@@ -311,15 +332,47 @@ void run_ray_tracer(const int n_photons)
                             ++toa_down_count[i_new];
                         }
                     }
+                    else
+                    {
+                        break;
+                    }
                 }
-                else if (toa_exit)
+            }
+
+            // Handle the collision events.
+            #pragma omp for reduction(+:n_photons_in) reduction(+:n_photons_out)
+            for (int n=0; n<n_photons_batch; ++n)
+            {
+                const int i = photons[n].position.x / dx_grid;
+                const int k = photons[n].position.z / dx_grid;
+
+                const double random_number = rg.fp64();
+
+                // Null collision.
+                if (random_number >= (k_ext[i + k*itot] / k_ext_null))
+                {
+                }
+                // Scattering.
+                else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
+                {
+                    const bool cloud_scatter = rg.fp64() < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
+                    const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], rg.fp64()) : rayleigh(rg.fp64());
+                    const double angle = rg.sign<double>() * std::acos(mu_scat)
+                        + std::atan2(photons[n].direction.x, photons[n].direction.z);
+
+                    photons[n].direction.x = std::sin(angle);
+                    photons[n].direction.z = std::cos(angle);
+                    photons[n].kind = Photon_kind::Diffuse;
+                }
+                // Absorption.
+                else
                 {
                     if (photons[n].status == Photon_status::Enabled)
                     {
                         ++n_photons_out;
 
                         #pragma omp atomic
-                        ++toa_up_count[i];
+                        ++atmos_count[i + k*itot];
                     }
 
                     reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
@@ -335,68 +388,6 @@ void run_ray_tracer(const int n_photons)
                         #pragma omp atomic
                         ++toa_down_count[i_new];
                     }
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-
-        // Handle the collision events.
-        #pragma omp parallel for reduction(+:n_photons_in) reduction(+:n_photons_out)
-        for (int n=0; n<n_photons_batch; ++n)
-        {
-            #ifdef _OPENMP
-            static thread_local Random_number_generator rg(omp_get_thread_num());
-            #else
-            static thread_local Random_number_generator rg(0);
-            #endif
-
-            const int i = photons[n].position.x / dx_grid;
-            const int k = photons[n].position.z / dx_grid;
-
-            const double random_number = rg.fp64();
-
-            // Null collision.
-            if (random_number >= (k_ext[i + k*itot] / k_ext_null))
-            {
-            }
-            // Scattering.
-            else if (random_number <= ssa[i + k*itot] * k_ext[i + k*itot] / k_ext_null)
-            {
-                const bool cloud_scatter = rg.fp64() < (k_ext[i + k*itot] - k_ext_gas) / k_ext[i + k*itot];
-                const double mu_scat = cloud_scatter ? henyey(asy[i + k*itot], rg.fp64()) : rayleigh(rg.fp64());
-                const double angle = rg.sign<double>() * std::acos(mu_scat)
-                    + std::atan2(photons[n].direction.x, photons[n].direction.z);
-
-                photons[n].direction.x = std::sin(angle);
-                photons[n].direction.z = std::cos(angle);
-                photons[n].kind = Photon_kind::Diffuse;
-            }
-            // Absorption.
-            else
-            {
-                if (photons[n].status == Photon_status::Enabled)
-                {
-                    ++n_photons_out;
-
-                    #pragma omp atomic
-                    ++atmos_count[i + k*itot];
-                }
-
-                reset_photon(photons[n], rg.fp64(), x_size, z_size, zenith_angle);
-
-                if (photon_generation_completed)
-                    photons[n].status = Photon_status::Disabled;
-
-                if (photons[n].status == Photon_status::Enabled)
-                {
-                    ++n_photons_in;
-
-                    const int i_new = photons[n].position.x / dx_grid;
-                    #pragma omp atomic
-                    ++toa_down_count[i_new];
                 }
             }
         }
