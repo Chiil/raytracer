@@ -5,10 +5,10 @@ import matplotlib.pyplot as patches
 
 
 # Set the grid and load the data.
-itot = 128
-jtot = 128
-ktot = 64
-dx = 50
+itot = 256
+jtot = 256
+ktot = 128
+dx = 25
 sigma_x = 40
 
 plot_raw_data = True
@@ -61,6 +61,10 @@ plt.figure()
 plt.pcolormesh(x, y, surface_down, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
 plt.colorbar()
+rect = patches.Rectangle(
+        (4000, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.title('surface_down')
@@ -70,7 +74,7 @@ plt.pcolormesh(x, y, surface_up, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
 plt.colorbar()
 rect = patches.Rectangle(
-        (2700, 2700), 1000, 1000,
+        (4000, 2700), 1000, 1000,
         edgecolor='k', facecolor='none', hatch='//')
 plt.gca().add_patch(rect)
 plt.xlabel('x (m)')
@@ -82,7 +86,7 @@ plt.pcolormesh(x, y, toa_down, shading='nearest',
         cmap=plt.cm.viridis, vmin=toa_down.min(), vmax=toa_down.max())
 plt.colorbar()
 rect = patches.Rectangle(
-        (2700, 2700), 1000, 1000,
+        (4000, 2700), 1000, 1000,
         edgecolor='k', facecolor='none', hatch='//')
 plt.gca().add_patch(rect)
 plt.xlabel('x (m)')
@@ -130,7 +134,7 @@ plt.figure()
 plt.pcolormesh(x, y, surface_down_filtered, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
 rect = patches.Rectangle(
-        (2700, 2700), 1000, 1000,
+        (4000, 2700), 1000, 1000,
         edgecolor='k', facecolor='none', hatch='//')
 plt.gca().add_patch(rect)
 plt.colorbar()
@@ -142,7 +146,7 @@ plt.figure()
 plt.pcolormesh(x, y, surface_up_filtered, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
 rect = patches.Rectangle(
-        (2700, 2700), 1000, 1000,
+        (4000, 2700), 1000, 1000,
         edgecolor='k', facecolor='none', hatch='//')
 plt.gca().add_patch(rect)
 plt.colorbar()

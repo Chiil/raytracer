@@ -163,10 +163,10 @@ void run_ray_tracer(const uint64_t n_photons)
 {
     //// DEFINE INPUT ////
     // Grid properties.
-    const double dx_grid = 50.;
-    const int itot = 128;
-    const int jtot = 128;
-    const int ktot = 64;
+    const double dx_grid = 25.;
+    const int itot = 256;
+    const int jtot = 256;
+    const int ktot = 128;
 
     const double x_size = itot*dx_grid;
     const double y_size = jtot*dx_grid;
@@ -174,7 +174,7 @@ void run_ray_tracer(const uint64_t n_photons)
 
     // Radiation properties.
     const double surface_albedo = 0.2;
-    const double zenith_angle = 40.*(M_PI/180.);
+    const double zenith_angle = 50.*(M_PI/180.);
     const double azimuth_angle = 20.*(M_PI/180.);
     constexpr int n_photons_batch = 1 << 16;
 
@@ -201,7 +201,7 @@ void run_ray_tracer(const uint64_t n_photons)
         for (int j=0; j<jtot; ++j)
             for (int i=0; i<itot; ++i)
             {
-                if (  (i+0.5)*dx_grid > 2700. && (i+0.5)*dx_grid < 3700.
+                if (  (i+0.5)*dx_grid > 4000. && (i+0.5)*dx_grid < 5000.
                    && (j+0.5)*dx_grid > 2700. && (j+0.5)*dx_grid < 3700.
                    && (k+0.5)*dx_grid > 1000. && (k+0.5)*dx_grid < 1500.)
                 {
@@ -348,8 +348,8 @@ void run_ray_tracer(const uint64_t n_photons)
                             const double mu_surface = std::sqrt(rg.fp64());
                             const double azimuth_surface = 2.*M_PI*rg.fp64();
                             // CvH: is this correct?
-                            photons[n].direction.x = mu_surface*rg.sign<double>()*std::sin(azimuth_surface);
-                            photons[n].direction.y = mu_surface*rg.sign<double>()*std::cos(azimuth_surface);
+                            photons[n].direction.x = mu_surface*std::sin(azimuth_surface);
+                            photons[n].direction.y = mu_surface*std::cos(azimuth_surface);
                             photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
                             photons[n].kind = Photon_kind::Diffuse;
                         }
