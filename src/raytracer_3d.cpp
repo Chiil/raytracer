@@ -73,6 +73,31 @@ struct Vector
 };
 
 
+Vector cross(const Vector& v1, const Vector& v2)
+{
+    return Vector{
+            v1.y*v2.z - v1.z*v2.y,
+            v1.z*v2.x - v1.x*v2.z,
+            v1.x*v2.y - v1.y*v2.x};
+}
+
+
+Vector dot(const Vector& v1, const Vector& v2)
+{
+    return Vector{v1.x*v2.x + v1.y*v2.y + v1.z*v1.z};
+}
+
+
+double norm(const Vector& v) { return std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
+
+
+Vector normalize(const Vector& v)
+{
+    const double length = norm(v);
+    return Vector{ v.x/length, v.y/length, v.z/length};
+}
+
+
 enum class Photon_kind { Direct, Diffuse };
 enum class Photon_status { Enabled, Disabled };
 
