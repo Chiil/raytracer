@@ -97,10 +97,12 @@ Vector normalize(const Vector& v)
     return Vector{ v.x/length, v.y/length, v.z/length};
 }
 
+
 Vector operator*(const Vector& v, const double s) { return Vector{s*v.x, s*v.y, s*v.z}; }
 Vector operator*(const double s, const Vector& v) { return Vector{s*v.x, s*v.y, s*v.z}; }
 Vector operator-(const Vector& v1, const Vector& v2) { return Vector{v1.x-v2.x, v1.y-v2.y, v1.z-v2.z}; }
 Vector operator+(const Vector& v1, const Vector& v2) { return Vector{v1.x+v2.x, v1.y+v2.y, v1.z+v2.z}; }
+
 
 enum class Photon_kind { Direct, Diffuse };
 enum class Photon_status { Enabled, Disabled };

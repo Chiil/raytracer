@@ -70,6 +70,30 @@ plt.ylabel('y (m)')
 plt.title('surface_down')
 
 plt.figure()
+plt.pcolormesh(x, y, surface_down_direct, shading='nearest',
+        cmap=plt.cm.viridis, vmin=surface_down_direct.min(), vmax=surface_down_direct.max())
+plt.colorbar()
+rect = patches.Rectangle(
+        (4000, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('surface_down_direct')
+
+plt.figure()
+plt.pcolormesh(x, y, surface_down_diffuse, shading='nearest',
+        cmap=plt.cm.viridis, vmin=surface_down_diffuse.min(), vmax=surface_down_diffuse.max())
+plt.colorbar()
+rect = patches.Rectangle(
+        (4000, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('surface_down_diffuse')
+
+plt.figure()
 plt.pcolormesh(x, y, surface_up, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
 plt.colorbar()
@@ -122,6 +146,7 @@ atmos_filtered = smooth_data_3d(atmos)
 
 
 # Plot the filtered data.
+"""
 plt.figure()
 plt.pcolormesh(x, z, atmos_filtered[:, jtot//2, :], shading='nearest',
         cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
@@ -153,6 +178,7 @@ plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.title('surface_up_filtered')
+"""
 
 plt.figure()
 if plot_raw_data:
