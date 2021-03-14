@@ -82,9 +82,9 @@ Vector cross(const Vector& v1, const Vector& v2)
 }
 
 
-Vector dot(const Vector& v1, const Vector& v2)
+double dot(const Vector& v1, const Vector& v2)
 {
-    return Vector{v1.x*v2.x + v1.y*v2.y + v1.z*v1.z};
+    return v1.x*v2.x + v1.y*v2.y + v1.z*v1.z;
 }
 
 
@@ -97,6 +97,10 @@ Vector normalize(const Vector& v)
     return Vector{ v.x/length, v.y/length, v.z/length};
 }
 
+Vector operator*(const Vector& v, const double s) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator*(const double s, const Vector& v) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator-(const Vector& v1, const Vector& v2) { return Vector{v1.x-v2.x, v1.y-v2.y, v1.z-v2.z}; }
+Vector operator+(const Vector& v1, const Vector& v2) { return Vector{v1.x+v2.x, v1.y+v2.y, v1.z+v2.z}; }
 
 enum class Photon_kind { Direct, Diffuse };
 enum class Photon_status { Enabled, Disabled };
@@ -428,13 +432,32 @@ void run_ray_tracer(const uint64_t n_photons)
                 else if (random_number <= ssa[ijk] * k_ext[ijk] / k_ext_null)
                 {
                     const bool cloud_scatter = rg.fp64() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
-                    const double mu_scat = cloud_scatter ? henyey(asy[ijk], rg.fp64()) : rayleigh(rg.fp64());
-                    const double angle = rg.sign<double>() * std::acos(mu_scat)
-                        + std::atan2(photons[n].direction.x, photons[n].direction.z);
+                    const double cos_scat = cloud_scatter ? henyey(asy[ijk], rg.fp64()) : rayleigh(rg.fp64());
+                    const double sin_scat = std::sqrt(1. - cos_scat*cos_scat);
 
-                    photons[n].direction.x = std::sin(angle);
-                    photons[n].direction.y = std::sin(angle);
-                    photons[n].direction.z = std::cos(angle);
+                    Vector t1{0., 0., 0.};
+                    if (std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.y))
+                    {
+                        if(std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.z))
+                            t1.x = 1;
+                        else
+                            t1.z = 1;
+                    }
+                    else
+                    {
+                        if(std::fabs(photons[n].direction.y) < std::fabs(photons[n].direction.z))
+                            t1.y = 1;
+                        else
+                            t1.z = 1;
+                    }
+                    t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
+                    Vector t2 = cross(photons[n].direction, t1);
+
+                    const double phi = 2.*M_PI*rg.fp64();
+
+                    photons[n].direction = cos_scat*photons[n].direction
+                            + sin_scat*(std::sin(phi)*t1 + std::cos(phi)*t2);
+
                     photons[n].kind = Photon_kind::Diffuse;
                 }
                 // Absorption.
