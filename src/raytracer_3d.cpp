@@ -438,14 +438,14 @@ void run_ray_tracer(const uint64_t n_photons)
                     Vector t1{0., 0., 0.};
                     if (std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.y))
                     {
-                        if(std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.z))
+                        if (std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.z))
                             t1.x = 1;
                         else
                             t1.z = 1;
                     }
                     else
                     {
-                        if(std::fabs(photons[n].direction.y) < std::fabs(photons[n].direction.z))
+                        if (std::fabs(photons[n].direction.y) < std::fabs(photons[n].direction.z))
                             t1.y = 1;
                         else
                             t1.z = 1;
