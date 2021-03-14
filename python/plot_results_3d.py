@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.ndimage
 import matplotlib.pyplot as plt
+import matplotlib.pyplot as patches
 
 
 # Set the grid and load the data.
@@ -65,9 +66,25 @@ plt.ylabel('y (m)')
 plt.title('surface_down')
 
 plt.figure()
-plt.pcolormesh(x, y, toa_down, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
+plt.pcolormesh(x, y, surface_up, shading='nearest',
+        cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
 plt.colorbar()
+rect = patches.Rectangle(
+        (2700, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('surface_up')
+
+plt.figure()
+plt.pcolormesh(x, y, toa_down, shading='nearest',
+        cmap=plt.cm.viridis, vmin=toa_down.min(), vmax=toa_down.max())
+plt.colorbar()
+rect = patches.Rectangle(
+        (2700, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.title('toa_down')
@@ -110,13 +127,28 @@ plt.ylabel('z (m)')
 plt.title('atmos_filtered')
 
 plt.figure()
-plt.pcolormesh(x, y, surface_down, shading='nearest',
+plt.pcolormesh(x, y, surface_down_filtered, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
+rect = patches.Rectangle(
+        (2700, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
 plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.title('surface_down_filtered')
 
+plt.figure()
+plt.pcolormesh(x, y, surface_up_filtered, shading='nearest',
+        cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
+rect = patches.Rectangle(
+        (2700, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
+plt.colorbar()
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('surface_up_filtered')
 
 plt.figure()
 if plot_raw_data:
