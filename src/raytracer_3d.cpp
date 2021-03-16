@@ -165,14 +165,17 @@ void run_ray_tracer(const uint64_t n_photons)
 {
     //// DEFINE INPUT ////
     // Grid properties.
-    const double dx_grid = 25.;
-    const int itot = 256;
-    const int jtot = 256;
+    const double dx_grid = 50.;
+    const double dy_grid = 50.;
+    const double dz_grid = 25.;
+
+    const int itot = 128;
+    const int jtot = 128;
     const int ktot = 128;
 
     const double x_size = itot*dx_grid;
-    const double y_size = jtot*dx_grid;
-    const double z_size = ktot*dx_grid;
+    const double y_size = jtot*dy_grid;
+    const double z_size = ktot*dz_grid;
 
     // Radiation properties.
     const double surface_albedo = 0.2;
@@ -204,8 +207,8 @@ void run_ray_tracer(const uint64_t n_photons)
             for (int i=0; i<itot; ++i)
             {
                 if (  (i+0.5)*dx_grid > 4000. && (i+0.5)*dx_grid < 5000.
-                   && (j+0.5)*dx_grid > 2700. && (j+0.5)*dx_grid < 3700.
-                   && (k+0.5)*dx_grid > 1000. && (k+0.5)*dx_grid < 1500.)
+                   && (j+0.5)*dy_grid > 2700. && (j+0.5)*dy_grid < 3700.
+                   && (k+0.5)*dz_grid > 1000. && (k+0.5)*dz_grid < 1500.)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
                     k_ext[ijk] = k_ext_gas + k_ext_cloud;
@@ -254,7 +257,7 @@ void run_ray_tracer(const uint64_t n_photons)
                     zenith_angle, azimuth_angle);
 
             const int i = photons[n].position.x / dx_grid;
-            const int j = photons[n].position.y / dx_grid;
+            const int j = photons[n].position.y / dy_grid;
             const int ij = i + j*itot;
 
             #pragma omp atomic
@@ -314,7 +317,7 @@ void run_ray_tracer(const uint64_t n_photons)
 
                     // Handle the surface and top exits.
                     const int i = photons[n].position.x / dx_grid;
-                    const int j = photons[n].position.y / dx_grid;
+                    const int j = photons[n].position.y / dy_grid;
                     const int ij = i + j*itot;
 
                     if (surface_exit)
@@ -370,7 +373,7 @@ void run_ray_tracer(const uint64_t n_photons)
                                 ++n_photons_in;
 
                                 const int i_new = photons[n].position.x / dx_grid;
-                                const int j_new = photons[n].position.y / dx_grid;
+                                const int j_new = photons[n].position.y / dy_grid;
                                 const int ij_new = i_new + j_new*itot;
                                 #pragma omp atomic
                                 ++toa_down_count[ij_new];
@@ -401,7 +404,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             ++n_photons_in;
 
                             const int i_new = photons[n].position.x / dx_grid;
-                            const int j_new = photons[n].position.y / dx_grid;
+                            const int j_new = photons[n].position.y / dy_grid;
                             const int ij_new = i_new + j_new*itot;
                             #pragma omp atomic
                             ++toa_down_count[ij_new];
@@ -419,8 +422,8 @@ void run_ray_tracer(const uint64_t n_photons)
             for (int n=0; n<n_photons_batch; ++n)
             {
                 const int i = photons[n].position.x / dx_grid;
-                const int j = photons[n].position.y / dx_grid;
-                const int k = photons[n].position.z / dx_grid;
+                const int j = photons[n].position.y / dy_grid;
+                const int k = photons[n].position.z / dz_grid;
 
                 const int ijk = i + j*itot + k*itot*jtot;
 
@@ -486,7 +489,7 @@ void run_ray_tracer(const uint64_t n_photons)
                         ++n_photons_in;
 
                         const int i_new = photons[n].position.x / dx_grid;
-                        const int j_new = photons[n].position.y / dx_grid;
+                        const int j_new = photons[n].position.y / dy_grid;
                         const int ij_new = i_new + j_new*itot;
                         #pragma omp atomic
                         ++toa_down_count[ij_new];

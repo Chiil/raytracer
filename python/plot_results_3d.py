@@ -5,18 +5,22 @@ import matplotlib.pyplot as patches
 
 
 # Set the grid and load the data.
-itot = 256
-jtot = 256
+itot = 128
+jtot = 128
 ktot = 128
-dx = 25
-sigma_x = 40
 
-j_plot = 120
+dx = 50.
+dy = 50.
+dz = 25.
+
+sigma = 40.
+
+j_plot = 60
 plot_raw_data = True
 
 x = np.arange(0.5*dx, itot*dx, dx)
-y = np.arange(0.5*dx, jtot*dx, dx)
-z = np.arange(0.5*dx, ktot*dx, dx)
+y = np.arange(0.5*dy, jtot*dy, dy)
+z = np.arange(0.5*dz, ktot*dz, dz)
 
 surface_down_direct = np.fromfile('surface_down_direct.bin', dtype=np.uint64).reshape(jtot, itot)
 surface_down_diffuse = np.fromfile('surface_down_diffuse.bin', dtype=np.uint64).reshape(jtot, itot)
@@ -134,9 +138,13 @@ plt.ylim(0, 1.3)
 
 
 # Filter the data
-sigma = sigma_x / dx
-smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['wrap', 'wrap'])
-smooth_data_3d = lambda data : scipy.ndimage.gaussian_filter(data, sigma=sigma, mode=['reflect', 'wrap', 'wrap'])
+sigma_nx = sigma/dx
+sigma_ny = sigma/dy
+sigma_nz = sigma/dz
+smooth_data_2d = lambda data : scipy.ndimage.gaussian_filter(
+        data, sigma=[sigma_ny, sigma_nx], mode=['wrap', 'wrap'])
+smooth_data_3d = lambda data : scipy.ndimage.gaussian_filter(
+        data, sigma=[sigma_nz, sigma_ny, sigma_nx], mode=['reflect', 'wrap', 'wrap'])
 
 surface_down_filtered = smooth_data_2d(surface_down)
 surface_down_direct_filtered = smooth_data_2d(surface_down_direct)
