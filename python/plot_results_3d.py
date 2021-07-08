@@ -16,6 +16,9 @@ dz = 25.
 sigma = 40.
 
 j_plot = 60
+k_plot_cloud = int(1350./dz)
+k_plot_sub = int(500./dz)
+
 plot_raw_data = True
 
 x = np.arange(0.5*dx, itot*dx, dx)
@@ -164,6 +167,12 @@ plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
 plt.title('atmos_filtered')
+
+plt.figure()
+plt.plot(x, atmos_filtered[k_plot_cloud, j_plot, :])
+plt.plot(x, atmos_filtered[k_plot_sub, j_plot, :])
+plt.xlabel('x (m)')
+plt.ylabel('atmos_filtered (-)')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_filtered, shading='nearest',
