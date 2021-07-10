@@ -6,64 +6,7 @@
 #include <vector>
 #include <algorithm>
 
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-
-
-inline uint64_t rotl(const uint64_t x, int k)
-{
-	return (x << k) | (x >> (64 - k));
-}
-
-
-// This is the xoroshiro128+ generator of Blackman and Vigna.
-// It has a uint64_t[2] as state.
-inline uint64_t next_xoroshiro_128_plus(uint64_t* __restrict__ s)
-{
-    const uint64_t s0 = s[0];
-    uint64_t s1 = s[1];
-    const uint64_t result = s0 + s1;
-
-    s1 ^= s0;
-    s[0] = rotl(s0, 24) ^ s1 ^ (s1 << 16);
-    s[1] = rotl(s1, 37);
-
-    return result;
-}
-
-
-// This is SplitMix64, a separate RNG to inialize the xo_ RNG.
-// It has a single uint64_t as state.
-inline uint64_t next_sr64(uint64_t& s)
-{
-	uint64_t z = (s += 0x9e3779b97f4a7c15);
-
-	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-
-	return z ^ (z >> 31);
-}
-
-
-class Random_number_generator
-{
-    public:
-        Random_number_generator(const int seed)
-        {
-            uint64_t init_state = seed;
-
-            state[0] = next_sr64(init_state);
-            state[1] = next_sr64(init_state);
-        };
-
-        inline double fp64() { return (next_xoroshiro_128_plus(state) >> 11) * 0x1.0p-53; }
-        template<typename T> inline int sign() { return static_cast<T>(-1 + 2*int(next_xoroshiro_128_plus(state) >> 63)); }
-
-    private:
-        uint64_t state[2];
-};
-
+#include <curand_kernel.h>
 
 struct Vector
 {
@@ -188,6 +131,7 @@ double sample_tau(const double random_number)
 }
 
 
+__host__ __device__
 void reset_photon(
         Photon& photon,
         const double random_number_x, const double random_number_y,
@@ -205,8 +149,49 @@ void reset_photon(
 }
 
 
+template<typename T>
+struct Random_number_generator
+{
+    __device__
+    Random_number_generator(unsigned int tid)
+    {
+        curand_init(tid, tid, 0, &state);
+    }
+
+    __device__ T
+    operator ()(void)
+    {
+        return curand_uniform(&state);
+    }
+
+    curandState state;
+};
+
+
 __global__
-void ray_tracer_kernel() {}
+void ray_tracer_init_kernel(
+        Photon* __restrict__ photons,
+        uint64_t* __restrict__ toa_down_count,
+        double x_size, double y_size, double z_size,
+        double dx_grid, double dy_grid, double dz_grid,
+        double zenith_angle, double azimuth_angle, 
+        const int itot)
+{
+    const int n = blockIdx.x*blockDim.x + threadIdx.x;
+
+    Random_number_generator<double> rng(n);
+
+    reset_photon(
+            photons[n], rng(), rng(),
+            x_size, y_size, z_size,
+            zenith_angle, azimuth_angle);
+
+    const int i = photons[n].position.x / dx_grid;
+    const int j = photons[n].position.y / dy_grid;
+    const int ij = i + j*itot;
+
+    ++toa_down_count[ij];
+}
 
 
 void run_ray_tracer(const uint64_t n_photons)
@@ -229,7 +214,6 @@ void run_ray_tracer(const uint64_t n_photons)
     const double surface_albedo = 0.2;
     const double zenith_angle = 50.*(M_PI/180.);
     const double azimuth_angle = 20.*(M_PI/180.);
-    constexpr int n_photons_batch = 1 << 16;
 
     // Input fields.
     const double k_ext_gas = 1.e-4; // 3.e-4;
@@ -310,13 +294,20 @@ void run_ray_tracer(const uint64_t n_photons)
 
 
     //// RUN THE RAY TRACER ////
+    constexpr int n_photons_batch = 256;
     Photon* photons = allocate_gpu<Photon>(n_photons_batch);
 
     dim3 grid{1}, block{n_photons_batch};
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    ray_tracer_kernel<<<grid, block>>>();
+    ray_tracer_init_kernel<<<grid, block>>>(
+            photons,
+            toa_down_count_gpu,
+            x_size, y_size, z_size,
+            dx_grid, dy_grid, dz_grid,
+            zenith_angle, azimuth_angle,
+            itot);
 
     /*
     uint64_t n_photons_in = n_photons_batch;
