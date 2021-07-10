@@ -7,8 +7,11 @@
 #include <algorithm>
 
 #include <curand_kernel.h>
+#include <float.h>
+
 
 #define uint64_t unsigned long long
+
 
 struct Vector
 {
@@ -62,6 +65,7 @@ struct Photon
 };
 
 
+__device__
 double pow2(const double d) { return d*d; }
 
 
@@ -109,6 +113,7 @@ void copy_from_gpu(T* cpu_data, const T* gpu_data, const int length)
 }
 
 
+__device__
 double rayleigh(const double random_number)
 {
     const double q = 4.*random_number - 2.;
@@ -118,6 +123,7 @@ double rayleigh(const double random_number)
 }
 
 
+__device__
 double henyey(const double g, const double random_number)
 {
     const double a = pow2(1. - pow2(g));
@@ -127,13 +133,15 @@ double henyey(const double g, const double random_number)
 }
 
 
+__device__
 double sample_tau(const double random_number)
 {
-    return -1.*std::log(-random_number + 1.) + std::numeric_limits<double>::epsilon();
+    // return -1.*log(-random_number + 1.) + std::numeric_limits<double>::epsilon();
+    return -1.*log(-random_number + 1.) + DBL_EPSILON;
 }
 
 
-__host__ __device__
+__device__
 void reset_photon(
         Photon& photon,
         const double random_number_x, const double random_number_y,
@@ -143,9 +151,9 @@ void reset_photon(
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
     photon.position.z = z_size;
-    photon.direction.x = -std::sin(zenith_angle)*std::cos(azimuth_angle);
-    photon.direction.y = -std::sin(zenith_angle)*std::sin(azimuth_angle);
-    photon.direction.z = -std::cos(zenith_angle);
+    photon.direction.x = -sin(zenith_angle) * cos(azimuth_angle);
+    photon.direction.y = -sin(zenith_angle) * sin(azimuth_angle);
+    photon.direction.z = -cos(zenith_angle);
     photon.kind = Photon_kind::Direct;
     photon.status = Photon_status::Enabled;
 }
@@ -200,13 +208,22 @@ void ray_tracer_init_kernel(
 __global__
 void ray_tracer_kernel(
         Photon* __restrict__ photons,
+        uint64_t int n_photons_in, uint64_t n_photons_out,
         uint64_t* __restrict__ toa_down_count,
+        uint64_t* __restrict__ toa_up_count,
+        uint64_t* __restrict__ surface_down_direct_count,
+        uint64_t* __restrict__ surface_down_diffuse_count,
+        uint64_t* __restrict__ surface_up_count,
+        const double k_ext_null,
+        const double surface_albedo,
         double x_size, double y_size, double z_size,
         double dx_grid, double dy_grid, double dz_grid,
         double zenith_angle, double azimuth_angle, 
         const int itot)
 {
     const int n = blockIdx.x*blockDim.x + threadIdx.x;
+
+    const bool photon_generation_completed = false;
 
     Random_number_generator<double> rng(n);
 
@@ -263,23 +280,23 @@ void ray_tracer_kernel(
             if (photons[n].kind == Photon_kind::Direct
                     && photons[n].status == Photon_status::Enabled)
             {
-                ++n_photons_out;
-                atomicAdd(&surface_down_direct_count[ij], 1)
+                atomicAdd(&n_photons_out, 1);
+                atomicAdd(&surface_down_direct_count[ij], 1);
             }
             else if (photons[n].kind == Photon_kind::Diffuse
                     && photons[n].status == Photon_status::Enabled)
             {
-                ++n_photons_out;
-                atomicAdd(&surface_down_diffuse_count[ij], 1)
+                atomicAdd(&n_photons_out, 1);
+                atomicAdd(&surface_down_diffuse_count[ij], 1);
             }
 
             // Surface scatter if smaller than albedo, otherwise absorb
-            if (rg.fp64() <= surface_albedo)
+            if (rng() <= surface_albedo)
             {
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    --n_photons_out;
-                    atomicAdd(&surface_up_count[ij], 1)
+                    atomicAdd(&n_photons_out, -1);
+                    atomicAdd(&surface_up_count[ij], 1);
                 }
 
                 const double mu_surface = std::sqrt(rng());
@@ -302,13 +319,13 @@ void ray_tracer_kernel(
 
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    ++n_photons_in;
+                    atomicAdd(&n_photons_in, 1);
 
                     const int i_new = photons[n].position.x / dx_grid;
                     const int j_new = photons[n].position.y / dy_grid;
                     const int ij_new = i_new + j_new*itot;
 
-                    atomicAdd(&toa_down_count[ij_new], 1)
+                    atomicAdd(&toa_down_count[ij_new], 1);
                 }
             }
         }
@@ -316,8 +333,8 @@ void ray_tracer_kernel(
         {
             if (photons[n].status == Photon_status::Enabled)
             {
-                ++n_photons_out;
-                atomicAdd(&toa_up_count[ij_new], 1)
+                atomicAdd(&n_photons_out, 1);
+                atomicAdd(&toa_up_count[ij], 1);
             }
 
             reset_photon(
@@ -331,13 +348,13 @@ void ray_tracer_kernel(
 
             if (photons[n].status == Photon_status::Enabled)
             {
-                ++n_photons_in;
+                atomicAdd(&n_photons_in, 1);
 
                 const int i_new = photons[n].position.x / dx_grid;
                 const int j_new = photons[n].position.y / dy_grid;
                 const int ij_new = i_new + j_new*itot;
 
-                atomicAdd(&toa_down_count[ij_new], 1)
+                atomicAdd(&toa_down_count[ij_new], 1);
             }
         }
         else
@@ -458,6 +475,20 @@ void run_ray_tracer(const uint64_t n_photons)
     ray_tracer_init_kernel<<<grid, block>>>(
             photons,
             toa_down_count_gpu,
+            x_size, y_size, z_size,
+            dx_grid, dy_grid, dz_grid,
+            zenith_angle, azimuth_angle,
+            itot);
+
+    uint64_t n_photons_in = n_photons_batch;
+    uint64_t n_photons_out = 0;
+
+    ray_tracer_kernel<<<grid, block>>>(
+            photons,
+            n_photons_in, n_photons_out,
+            toa_down_count_gpu, toa_up_count_gpu,
+            surface_down_direct_count_gpu, surface_down_diffuse_count_gpu, surface_up_count_gpu,
+            k_ext_null, surface_albedo,
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             zenith_angle, azimuth_angle,
