@@ -188,7 +188,7 @@ void run_ray_tracer(const uint64_t n_photons)
     const double ssa_gas = 0.5;
     const double asy_gas = 0.;
 
-    const double k_ext_cloud = 5.e-3;
+    const double k_ext_cloud = 2.e-2;
     const double ssa_cloud = 0.9;
     const double asy_cloud = 0.85;
 
@@ -229,7 +229,8 @@ void run_ray_tracer(const uint64_t n_photons)
     std::vector<uint64_t> surface_up_count(itot*jtot);
     std::vector<uint64_t> toa_down_count(itot*jtot);
     std::vector<uint64_t> toa_up_count(itot*jtot);
-    std::vector<uint64_t> atmos_count(itot*jtot*ktot);
+    std::vector<uint64_t> atmos_direct_count(itot*jtot*ktot);
+    std::vector<uint64_t> atmos_diffuse_count(itot*jtot*ktot);
 
 
     //// RUN THE RAY TRACER ////
@@ -472,8 +473,16 @@ void run_ray_tracer(const uint64_t n_photons)
                     {
                         ++n_photons_out;
 
-                        #pragma omp atomic
-                        ++atmos_count[ijk];
+                        if (photons[n].kind == Photon_kind::Direct)
+                        {
+                            #pragma omp atomic
+                            ++atmos_direct_count[ijk];
+                        }
+                        else
+                        {
+                            #pragma omp atomic
+                            ++atmos_diffuse_count[ijk];
+                        }
                     }
 
                     reset_photon(
@@ -524,7 +533,8 @@ void run_ray_tracer(const uint64_t n_photons)
     save_binary("surface_down_direct", surface_down_direct_count.data(), itot*jtot);
     save_binary("surface_down_diffuse", surface_down_diffuse_count.data(), itot*jtot);
     save_binary("surface_up", surface_up_count.data(), itot*jtot);
-    save_binary("atmos", atmos_count.data(), itot*jtot*ktot);
+    save_binary("atmos_direct", atmos_direct_count.data(), itot*jtot*ktot);
+    save_binary("atmos_diffuse", atmos_diffuse_count.data(), itot*jtot*ktot);
 }
 
 
