@@ -377,7 +377,7 @@ void ray_tracer_kernel(
 __global__
 void ray_tracer_step2_kernel(
         Photon* __restrict__ photons,
-        uint64_t int n_photons_in, uint64_t n_photons_out,
+        uint64_t n_photons_in, uint64_t n_photons_out,
         uint64_t* __restrict__ toa_down_count,
         uint64_t* __restrict__ toa_up_count,
         uint64_t* __restrict__ surface_down_direct_count,
@@ -406,6 +406,7 @@ void ray_tracer_step2_kernel(
     const int ijk = i + j*itot + k*itot*jtot;
 
     const double random_number = rng();
+
 
     // Null collision.
     if (random_number >= (k_ext[ijk] / k_ext_null))
@@ -448,7 +449,7 @@ void ray_tracer_step2_kernel(
     {
         if (photons[n].status == Photon_status::Enabled)
         {
-            atomicAdd(&n_photons_out, 1);
+            // atomicAdd(&n_photons_out, 1);
 
             if (photons[n].kind == Photon_kind::Direct)
                 atomicAdd(&atmos_direct_count[ijk], 1);
@@ -466,7 +467,7 @@ void ray_tracer_step2_kernel(
 
         if (photons[n].status == Photon_status::Enabled)
         {
-            atomicAdd(&n_photons_in, 1);
+            // atomicAdd(&n_photons_in, 1);
 
             const int i_new = photons[n].position.x / dx_grid;
             const int j_new = photons[n].position.y / dy_grid;
