@@ -197,6 +197,157 @@ void ray_tracer_init_kernel(
 }
 
 
+__global__
+void ray_tracer_kernel(
+        Photon* __restrict__ photons,
+        uint64_t* __restrict__ toa_down_count,
+        double x_size, double y_size, double z_size,
+        double dx_grid, double dy_grid, double dz_grid,
+        double zenith_angle, double azimuth_angle, 
+        const int itot)
+{
+    const int n = blockIdx.x*blockDim.x + threadIdx.x;
+
+    Random_number_generator<double> rng(n);
+
+    while (true)
+    {
+        const double dn = sample_tau(rng()) / k_ext_null;
+        double dx = photons[n].direction.x * dn;
+        double dy = photons[n].direction.y * dn;
+        double dz = photons[n].direction.z * dn;
+
+        bool surface_exit = false;
+        bool toa_exit = false;
+
+        if ((photons[n].position.z + dz) <= 0.)
+        {
+            const double fac = std::abs(photons[n].position.z / dz);
+            dx *= fac;
+            dy *= fac;
+            dz *= fac;
+
+            surface_exit = true;
+        }
+        else if ((photons[n].position.z + dz) >= z_size)
+        {
+            const double fac = std::abs((z_size - photons[n].position.z) / dz);
+            dx *= fac;
+            dy *= fac;
+            dz *= fac;
+
+            toa_exit = true;
+        }
+
+        photons[n].position.x += dx;
+        photons[n].position.y += dy;
+        photons[n].position.z += dz;
+
+        // Cyclic boundary condition in x.
+        photons[n].position.x = std::fmod(photons[n].position.x, x_size);
+        if (photons[n].position.x < 0.)
+            photons[n].position.x += x_size;
+
+        // Cyclic boundary condition in y.
+        photons[n].position.y = std::fmod(photons[n].position.y, y_size);
+        if (photons[n].position.y < 0.)
+            photons[n].position.y += y_size;
+
+        // Handle the surface and top exits.
+        const int i = photons[n].position.x / dx_grid;
+        const int j = photons[n].position.y / dy_grid;
+        const int ij = i + j*itot;
+
+        if (surface_exit)
+        {
+            if (photons[n].kind == Photon_kind::Direct
+                    && photons[n].status == Photon_status::Enabled)
+            {
+                ++n_photons_out;
+                atomicAdd(&surface_down_direct_count[ij], 1)
+            }
+            else if (photons[n].kind == Photon_kind::Diffuse
+                    && photons[n].status == Photon_status::Enabled)
+            {
+                ++n_photons_out;
+                atomicAdd(&surface_down_diffuse_count[ij], 1)
+            }
+
+            // Surface scatter if smaller than albedo, otherwise absorb
+            if (rg.fp64() <= surface_albedo)
+            {
+                if (photons[n].status == Photon_status::Enabled)
+                {
+                    --n_photons_out;
+                    atomicAdd(&surface_up_count[ij], 1)
+                }
+
+                const double mu_surface = std::sqrt(rng());
+                const double azimuth_surface = 2.*M_PI*rng();
+                // CvH: is this correct?
+                photons[n].direction.x = mu_surface*std::sin(azimuth_surface);
+                photons[n].direction.y = mu_surface*std::cos(azimuth_surface);
+                photons[n].direction.z = std::sqrt(1. - mu_surface*mu_surface);
+                photons[n].kind = Photon_kind::Diffuse;
+            }
+            else
+            {
+                reset_photon(
+                        photons[n], rng(), rng(),
+                        x_size, y_size, z_size,
+                        zenith_angle, azimuth_angle);
+
+                if (photon_generation_completed)
+                    photons[n].status = Photon_status::Disabled;
+
+                if (photons[n].status == Photon_status::Enabled)
+                {
+                    ++n_photons_in;
+
+                    const int i_new = photons[n].position.x / dx_grid;
+                    const int j_new = photons[n].position.y / dy_grid;
+                    const int ij_new = i_new + j_new*itot;
+
+                    atomicAdd(&toa_down_count[ij_new], 1)
+                }
+            }
+        }
+        else if (toa_exit)
+        {
+            if (photons[n].status == Photon_status::Enabled)
+            {
+                ++n_photons_out;
+                atomicAdd(&toa_up_count[ij_new], 1)
+            }
+
+            reset_photon(
+                    photons[n], rng(), rng(),
+                    x_size, y_size, z_size,
+                    zenith_angle, azimuth_angle);
+
+
+            if (photon_generation_completed)
+                photons[n].status = Photon_status::Disabled;
+
+            if (photons[n].status == Photon_status::Enabled)
+            {
+                ++n_photons_in;
+
+                const int i_new = photons[n].position.x / dx_grid;
+                const int j_new = photons[n].position.y / dy_grid;
+                const int ij_new = i_new + j_new*itot;
+
+                atomicAdd(&toa_down_count[ij_new], 1)
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+
 void run_ray_tracer(const uint64_t n_photons)
 {
     //// DEFINE INPUT ////
