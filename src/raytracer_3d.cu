@@ -8,6 +8,8 @@
 
 #include <curand_kernel.h>
 
+#define uint64_t unsigned long long
+
 struct Vector
 {
     double x;
@@ -190,7 +192,8 @@ void ray_tracer_init_kernel(
     const int j = photons[n].position.y / dy_grid;
     const int ij = i + j*itot;
 
-    ++toa_down_count[ij];
+    // Make sure increment is atomic.
+    atomicAdd(&toa_down_count[ij], 1);
 }
 
 
