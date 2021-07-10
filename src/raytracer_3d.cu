@@ -65,35 +65,43 @@ class Random_number_generator
 };
 
 
-dim3 cross(const dim3 v1, const dim3 v2)
+struct Vector
 {
-    return dim3{
+    double x;
+    double y;
+    double z;
+};
+
+
+Vector cross(const Vector& v1, const Vector& v2)
+{
+    return Vector{
             v1.y*v2.z - v1.z*v2.y,
             v1.z*v2.x - v1.x*v2.z,
             v1.x*v2.y - v1.y*v2.x};
 }
 
 
-double dot(const dim3 v1, const dim3 v2)
+double dot(const Vector& v1, const Vector& v2)
 {
     return v1.x*v2.x + v1.y*v2.y + v1.z*v1.z;
 }
 
 
-double norm(const dim3 v) { return std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
+double norm(const Vector& v) { return std::sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
 
 
-dim3 normalize(const dim3 v)
+Vector normalize(const Vector& v)
 {
     const double length = norm(v);
-    return dim3{ v.x/length, v.y/length, v.z/length};
+    return Vector{ v.x/length, v.y/length, v.z/length};
 }
 
 
-dim3 operator*(const dim3 v, const double s) { return dim3{s*v.x, s*v.y, s*v.z}; }
-dim3 operator*(const double s, const dim3 v) { return dim3{s*v.x, s*v.y, s*v.z}; }
-dim3 operator-(const dim3 v1, const dim3 v2) { return dim3{v1.x-v2.x, v1.y-v2.y, v1.z-v2.z}; }
-dim3 operator+(const dim3 v1, const dim3 v2) { return dim3{v1.x+v2.x, v1.y+v2.y, v1.z+v2.z}; }
+Vector operator*(const Vector& v, const double s) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator*(const double s, const Vector& v) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator-(const Vector& v1, const Vector& v2) { return Vector{v1.x-v2.x, v1.y-v2.y, v1.z-v2.z}; }
+Vector operator+(const Vector& v1, const Vector& v2) { return Vector{v1.x+v2.x, v1.y+v2.y, v1.z+v2.z}; }
 
 
 enum class Photon_kind { Direct, Diffuse };
@@ -102,14 +110,58 @@ enum class Photon_status { Enabled, Disabled };
 
 struct Photon
 {
-    dim3 position;
-    dim3 direction;
+    Vector position;
+    Vector direction;
     Photon_kind kind;
     Photon_status status;
 };
 
 
 double pow2(const double d) { return d*d; }
+
+
+#define cuda_safe_call(ans) { gpu_assert((ans), __FILE__, __LINE__); }
+
+inline void gpu_assert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+    if (code != cudaSuccess)
+    {
+        fprintf(stderr,"CUDA_SAFE_CALL: %s %s %d\n", cudaGetErrorString(code), file, line);
+        if (abort) exit(code);
+    }
+}
+
+
+template<typename T>
+T* allocate_gpu(const int length)
+{
+    T* data_ptr = nullptr;
+    cuda_safe_call(cudaMalloc((void **) &data_ptr, length*sizeof(T)));
+
+    return data_ptr;
+}
+
+
+template<typename T>
+void free_gpu(T*& data_ptr)
+{
+    cuda_safe_call(cudaFree(data_ptr));
+    data_ptr = nullptr;
+}
+
+
+template<typename T>
+void copy_to_gpu(T* gpu_data, const T* cpu_data, const int length)
+{
+    cuda_safe_call(cudaMemcpy(gpu_data, cpu_data, length*sizeof(T), cudaMemcpyHostToDevice));
+}
+
+
+template<typename T>
+void copy_from_gpu(T* cpu_data, const T* gpu_data, const int length)
+{
+    cuda_safe_call(cudaMemcpy(cpu_data, gpu_data, length*sizeof(T), cudaMemcpyDeviceToHost));
+}
 
 
 double rayleigh(const double random_number)
@@ -153,35 +205,8 @@ void reset_photon(
 }
 
 
-template<typename T>
-T* allocate_gpu(const int length)
-{
-    T* data_ptr = nullptr;
-    cuda_safe_call(cudaMalloc((void **) &data_ptr, length*sizeof(T)));
-
-    return data_ptr;
-}
-
-template<typename T>
-void free_gpu(T*& data_ptr)
-{
-    cuda_safe_call(cudaFree(data_ptr));
-    data_ptr = nullptr;
-}
-
-
-template<typename T>
-void copy_to_gpu(T* gpu_data, const T* cpu_data, const int length)
-{
-    cuda_safe_call(cudaMemcpy(gpu_data, cpu_data, length*sizeof(T), cudaMemcpyHostToDevice));
-}
-
-
-template<typename T>
-void copy_from_gpu(T* cpu, const T* gpu, const int length)
-{
-    cuda_safe_call(cudaMemcpy(cpu_data, gpu_data, length*sizeof(T), cudaMemcpyDeviceToHost));
-}
+__global__
+void ray_tracer_kernel() {}
 
 
 void run_ray_tracer(const uint64_t n_photons)
@@ -211,7 +236,7 @@ void run_ray_tracer(const uint64_t n_photons)
     const double ssa_gas = 0.5;
     const double asy_gas = 0.;
 
-    const double k_ext_cloud = 2.e-2;
+    const double k_ext_cloud = 5.e-3;
     const double ssa_cloud = 0.9;
     const double asy_cloud = 0.85;
 
@@ -258,41 +283,42 @@ void run_ray_tracer(const uint64_t n_photons)
 
     //// COPY THE DATA TO THE GPU.
     // Input array.
-    double* k_ext_gpu = allocate_gpu(itot*jtot*ktot);
-    double* ssa_gpu = allocate_gpu(itot*jtot*ktot);
-    double* asy_gpu = allocate_gpu(itot*jtot*ktot);
+    double* k_ext_gpu = allocate_gpu<double>(itot*jtot*ktot);
+    double* ssa_gpu = allocate_gpu<double>(itot*jtot*ktot);
+    double* asy_gpu = allocate_gpu<double>(itot*jtot*ktot);
 
-    copy_to_gpu(k_ext_gpu, atmos_diffuse_count, itot*jtot*ktot);
-    copy_to_gpu(ssa_gpu, atmos_diffuse_count, itot*jtot*ktot);
-    copy_to_gpu(k_ext_gpu, atmos_diffuse_count, itot*jtot*ktot);
+    copy_to_gpu(k_ext_gpu, k_ext.data(), itot*jtot*ktot);
+    copy_to_gpu(ssa_gpu, ssa.data(), itot*jtot*ktot);
+    copy_to_gpu(asy_gpu, asy.data(), itot*jtot*ktot);
 
     // Output arrays. Copy them in order to enable restarts later.
-    uint64_t* surface_down_direct_count_gpu = allocate_gpu<uint64_t>(surface_down_direct_count, itot*jtot);
-    uint64_t* surface_down_diffuse_count_gpu = allocate_gpu<uint64_t>(surface_down_diffuse_count, itot*jtot);
-    uint64_t* surface_surface_up_count_gpu = allocate_gpu<uint64_t>(surface_up_count, itot*jtot);
-    uint64_t* surface_toa_down_count_gpu = allocate_gpu<uint64_t>(toa_down_count, itot*jtot);
-    uint64_t* surface_toa_up_count_gpu = allocate_gpu<uint64_t>(toa_up_count, itot*jtot);
-    uint64_t* atmos_direct_count_gpu = allocate_gpu<uint64_t>(atmos_direct_count, itot*jtot*ktot);
-    uint64_t* atmos_diffuse_count_gpu = allocate_gpu<uint64_t>(atmos_diffuse_count, itot*jtot*ktot);
+    uint64_t* surface_down_direct_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
+    uint64_t* surface_down_diffuse_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
+    uint64_t* surface_up_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
+    uint64_t* toa_down_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
+    uint64_t* toa_up_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
+    uint64_t* atmos_direct_count_gpu = allocate_gpu<uint64_t>(itot*jtot*ktot);
+    uint64_t* atmos_diffuse_count_gpu = allocate_gpu<uint64_t>(itot*jtot*ktot);
 
-    copy_to_gpu(surface_down_direct_count_gpu, surface_down_direct_count, itot*jtot);
-    copy_to_gpu(surface_down_diffuse_count_gpu, surface_down_diffuse_count, itot*jtot);
-    copy_to_gpu(surface_surface_up_count_gpu, surface_surface_up_count, itot*jtot);
-    copy_to_gpu(surface_toa_down_count_gpu, surface_toa_down_count, itot*jtot);
-    copy_to_gpu(surface_toa_up_count_gpu, surface_toa_up_count, itot*jtot);
-    copy_to_gpu(atmos_direct_count_gpu, atmos_direct_count, itot*jtot*ktot);
-    copy_to_gpu(atmos_diffuse_count_gpu, atmos_diffuse_count, itot*jtot*ktot);
+    copy_to_gpu(surface_down_direct_count_gpu, surface_down_direct_count.data(), itot*jtot);
+    copy_to_gpu(surface_down_diffuse_count_gpu, surface_down_diffuse_count.data(), itot*jtot);
+    copy_to_gpu(surface_up_count_gpu, surface_up_count.data(), itot*jtot);
+    copy_to_gpu(toa_down_count_gpu, toa_down_count.data(), itot*jtot);
+    copy_to_gpu(toa_up_count_gpu, toa_up_count.data(), itot*jtot);
+    copy_to_gpu(atmos_direct_count_gpu, atmos_direct_count.data(), itot*jtot*ktot);
+    copy_to_gpu(atmos_diffuse_count_gpu, atmos_diffuse_count.data(), itot*jtot*ktot);
 
 
     //// RUN THE RAY TRACER ////
     Photon* photons = allocate_gpu<Photon>(n_photons_batch);
 
-    cudaEvent_t start;
-    cudaEvent_t stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
+    dim3 grid{1}, block{n_photons_batch};
 
+    auto start = std::chrono::high_resolution_clock::now();
+
+    ray_tracer_kernel<<<grid, block>>>();
+
+    /*
     uint64_t n_photons_in = n_photons_batch;
     uint64_t n_photons_out = 0;
 
@@ -496,7 +522,7 @@ void run_ray_tracer(const uint64_t n_photons)
                     const double cos_scat = cloud_scatter ? henyey(asy[ijk], rg.fp64()) : rayleigh(rg.fp64());
                     const double sin_scat = std::sqrt(1. - cos_scat*cos_scat);
 
-                    dim3 t1{0., 0., 0.};
+                    Vector t1{0., 0., 0.};
                     if (std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.y))
                     {
                         if (std::fabs(photons[n].direction.x) < std::fabs(photons[n].direction.z))
@@ -512,7 +538,7 @@ void run_ray_tracer(const uint64_t n_photons)
                             t1.z = 1;
                     }
                     t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
-                    dim3 t2 = cross(photons[n].direction, t1);
+                    Vector t2 = cross(photons[n].direction, t1);
 
                     const double phi = 2.*M_PI*rg.fp64();
 
@@ -528,16 +554,8 @@ void run_ray_tracer(const uint64_t n_photons)
                     {
                         ++n_photons_out;
 
-                        if (photons[n].kind == Photon_kind::Direct)
-                        {
-                            #pragma omp atomic
-                            ++atmos_direct_count[ijk];
-                        }
-                        else
-                        {
-                            #pragma omp atomic
-                            ++atmos_diffuse_count[ijk];
-                        }
+                        #pragma omp atomic
+                        ++atmos_count[ijk];
                     }
 
                     reset_photon(
@@ -562,24 +580,24 @@ void run_ray_tracer(const uint64_t n_photons)
             }
         }
     }
+    */
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    float duration = 0.f;
-    cudaEventElapsedTime(&duration, start, stop);
+    cuda_safe_call(cudaDeviceSynchronize());
 
-    std::cout << "Duration: " << std::setprecision(5) << duration << " (ms)" << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    double duration = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+    std::cout << "Duration: " << std::setprecision(5) << duration << " (s)" << std::endl;
     //// END RUNNING OF RAY TRACER ////
 
 
     //// COPY OUTPUT BACK TO CPU ////
-    copy_from_gpu(surface_down_direct_count, surface_down_direct_count_gpu, itot*jtot);
-    copy_from_gpu(surface_down_diffuse_count, surface_down_diffuse_count_gpu, itot*jtot);
-    copy_from_gpu(surface_surface_up_count, surface_surface_up_count_gpu, itot*jtot);
-    copy_from_gpu(surface_toa_down_count, surface_toa_down_count_gpu, itot*jtot);
-    copy_from_gpu(surface_toa_up_count, surface_toa_up_count_gpu, itot*jtot);
-    copy_from_gpu(atmos_direct_count, atmos_direct_count_gpu, itot*jtot*ktot);
-    copy_from_gpu(atmos_diffuse_count, atmos_diffuse_count_gpu, itot*jtot*ktot);
+    copy_from_gpu(surface_down_direct_count.data(), surface_down_direct_count_gpu, itot*jtot);
+    copy_from_gpu(surface_down_diffuse_count.data(), surface_down_diffuse_count_gpu, itot*jtot);
+    copy_from_gpu(surface_up_count.data(), surface_up_count_gpu, itot*jtot);
+    copy_from_gpu(toa_down_count.data(), toa_down_count_gpu, itot*jtot);
+    copy_from_gpu(toa_up_count.data(), toa_up_count_gpu, itot*jtot);
+    copy_from_gpu(atmos_direct_count.data(), atmos_direct_count_gpu, itot*jtot*ktot);
+    copy_from_gpu(atmos_diffuse_count.data(), atmos_diffuse_count_gpu, itot*jtot*ktot);
 
 
     //// SAVE THE OUTPUT TO DISK ////

@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.4...3.18)
 
-project(raytracer CXX)
+if (USECUDA)
+    project(raytracer CXX CUDA)
+else()
+    project(raytracer CXX)
+endif()
 
 
 # Compiler settings.
@@ -47,3 +51,4 @@ endif()
 
 add_executable(raytracer src/raytracer.cpp)
 add_executable(raytracer_3d src/raytracer_3d.cpp)
+add_executable(raytracer_3d_gpu src/raytracer_3d.cu)
