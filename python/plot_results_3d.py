@@ -31,7 +31,10 @@ surface_down = surface_down_direct + surface_down_diffuse
 surface_up = np.fromfile('surface_up.bin', dtype=np.uint64).reshape(jtot, itot)
 toa_up = np.fromfile('toa_up.bin', dtype=np.uint64).reshape(jtot, itot)
 toa_down = np.fromfile('toa_down.bin', dtype=np.uint64).reshape(jtot, itot)
-atmos = np.fromfile('atmos.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
+atmos_direct = np.fromfile('atmos_direct.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
+atmos_diffuse = np.fromfile('atmos_diffuse.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
+
+atmos = atmos_direct + atmos_diffuse
 
 
 # Check the photon balance.
