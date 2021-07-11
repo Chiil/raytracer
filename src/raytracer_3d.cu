@@ -233,7 +233,7 @@ void ray_tracer_kernel(
 
     const bool photon_generation_completed = false;
 
-    Random_number_generator<double> rng(n);
+    Random_number_generator<double> rng(n + n_photons_in[0]);
 
     while (true)
     {
@@ -397,7 +397,7 @@ void ray_tracer_step2_kernel(
 
     const bool photon_generation_completed = false;
 
-    Random_number_generator<double> rng(n);
+    Random_number_generator<double> rng(n + n_photons_in[0]);
 
     const int i = photons[n].position.x / dx_grid;
     const int j = photons[n].position.y / dy_grid;
@@ -578,7 +578,8 @@ void run_ray_tracer(const uint64_t n_photons)
 
 
     //// RUN THE RAY TRACER ////
-    constexpr int n_photons_batch = 1024;
+    constexpr int n_photons_batch = 1 << 18;
+    constexpr int block_size = 512;
     Photon* photons = allocate_gpu<Photon>(n_photons_batch);
 
     uint64_t n_photons_in = n_photons_batch;
@@ -590,7 +591,7 @@ void run_ray_tracer(const uint64_t n_photons)
     copy_to_gpu(n_photons_in_gpu, &n_photons_in, 1);
     copy_to_gpu(n_photons_out_gpu, &n_photons_out, 1);
 
-    dim3 grid{1}, block{n_photons_batch};
+    dim3 grid{n_photons_batch/block_size}, block{block_size};
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -602,7 +603,7 @@ void run_ray_tracer(const uint64_t n_photons)
             zenith_angle, azimuth_angle,
             itot);
 
-    for (int i=0; i<n_photons/n_photons_batch; ++i)
+    for (int i=0; i<2*2*n_photons/n_photons_batch; ++i)
     {
         ray_tracer_kernel<<<grid, block>>>(
                 photons,
