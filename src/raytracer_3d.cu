@@ -223,24 +223,22 @@ void ray_tracer_kernel(
         uint64_t* __restrict__ surface_up_count,
         uint64_t* __restrict__ atmos_direct_count,
         uint64_t* __restrict__ atmos_diffuse_count,
-        double* __restrict__ k_ext, double* __restrict__ ssa, double* __restrict__ asy,
+        const double* __restrict__ k_ext, const double* __restrict__ ssa, const double* __restrict__ asy,
         const double k_ext_null, const double k_ext_gas,
         const double surface_albedo,
-        double x_size, double y_size, double z_size,
-        double dx_grid, double dy_grid, double dz_grid,
-        double zenith_angle, double azimuth_angle, 
+        const double x_size, const double y_size, const double z_size,
+        const double dx_grid, const double dy_grid, const double dz_grid,
+        const double zenith_angle, const double azimuth_angle, 
         const int itot, const int jtot)
 {
-    // uint64_t tot_photon_in = blockDim.x;
-    // uint64_t tot_photon_out = 0;
-
     bool photon_generation_completed = false;
 
     const int n = threadIdx.x;
 
     Random_number_generator<double> rng(n + n_photons_in[n]);
 
-    for (int ii=0; ii<50000; ++ii)
+    // CvH: This range needs fixing.
+    for (int ii=0; ii<11200; ++ii)
     {
         const double dn = sample_tau(rng()) / k_ext_null;
         double dx = photons[n].direction.x * dn;
@@ -318,7 +316,7 @@ void ray_tracer_kernel(
 
                 const double mu_surface = sqrt(rng());
                 const double azimuth_surface = 2.*M_PI*rng();
-                // CvH: is this correct?
+
                 photons[n].direction.x = mu_surface*sin(azimuth_surface);
                 photons[n].direction.y = mu_surface*cos(azimuth_surface);
                 photons[n].direction.z = sqrt(1. - mu_surface*mu_surface);
