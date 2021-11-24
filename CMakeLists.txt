@@ -51,4 +51,6 @@ endif()
 
 add_executable(raytracer src/raytracer.cpp)
 add_executable(raytracer_3d src/raytracer_3d.cpp)
-add_executable(raytracer_3d_gpu src/raytracer_3d.cu)
+if (USECUDA)
+    add_executable(raytracer_3d_gpu src/raytracer_3d.cu)
+endif()
