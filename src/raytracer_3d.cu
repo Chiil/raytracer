@@ -144,8 +144,8 @@ double henyey(const double g, const double random_number)
 __device__
 double sample_tau(const double random_number)
 {
-    // return -1.*log(-random_number + 1.) + std::numeric_limits<double>::epsilon();
-    return -1.*log(-random_number + 1.) + DBL_EPSILON;
+    // Prevent log(0) possibility.
+    return -1.*log(-random_number + 1. + DBL_EPSILON);
 }
 
 
@@ -238,7 +238,7 @@ void ray_tracer_kernel(
     Random_number_generator<double> rng(n + n_photons_in[n]);
 
     // CvH: This range needs fixing.
-    for (int ii=0; ii<11200; ++ii)
+    for (int ii=0; ii<112000; ++ii)
     {
         const double dn = sample_tau(rng()) / k_ext_null;
         double dx = photons[n].direction.x * dn;
