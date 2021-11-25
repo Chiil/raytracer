@@ -618,7 +618,7 @@ void run_ray_tracer(const uint64_t n_photons)
         photons_in += n_photons_in[n];
         photons_out += n_photons_out[n];
     }
-    std::cout << "CvH: " << photons_in << ", " << photons_out << ", " << toa_down << std::endl;
+    std::cout << "Photons (in, out, toa): " << photons_in << ", " << photons_out << ", " << toa_down << std::endl;
 
 
     //// SAVE THE OUTPUT TO DISK ////
