@@ -11,16 +11,18 @@
 
 
 using Int = unsigned long long;
-const Int Atomic_reduce_const = 0xffffffffffffffffULL;
+const Int Atomic_reduce_const = (Int)(-1LL);
 
 // using Int = unsigned int;
-// const Int Atomic_reduce_const = 0xffffffff;
+// const Int Atomic_reduce_const = (Int)(-1);
 
 using Float = double;
 const Float Float_epsilon = DBL_EPSILON;
+constexpr int block_size = 768;
 
 // using Float = float;
 // const Float Float_epsilon = FLT_EPSILON;
+// constexpr int block_size = 1024;
 
 
 struct Vector
@@ -324,7 +326,7 @@ void ray_tracer_kernel(
                 }
 
                 const Float mu_surface = sqrt(rng());
-                const Float azimuth_surface = 2.*M_PI*rng();
+                const Float azimuth_surface = Float(2.*M_PI)*rng();
 
                 photons[n].direction.x = mu_surface*sin(azimuth_surface);
                 photons[n].direction.y = mu_surface*cos(azimuth_surface);
@@ -395,7 +397,7 @@ void ray_tracer_kernel(
             {
                 const bool cloud_scatter = rng() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
                 const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
-                const Float sin_scat = sqrt(1. - cos_scat*cos_scat);
+                const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat);
 
                 Vector t1{Float(0.), Float(0.), Float(0.)};
                 if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
@@ -563,7 +565,6 @@ void run_ray_tracer(const Int n_photons)
 
 
     //// RUN THE RAY TRACER ////
-    constexpr int block_size = 512;
     Photon* photons = allocate_gpu<Photon>(block_size);
 
     Int n_photons_in = block_size;
