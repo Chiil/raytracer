@@ -10,14 +10,24 @@
 #include <float.h>
 
 
-#define uint64_t unsigned long long
+using Int = unsigned long long;
+const Int Atomic_reduce_const = 0xffffffffffffffffULL;
+
+// using Int = unsigned int;
+// const Int Atomic_reduce_const = 0xffffffff;
+
+using Float = double;
+const Float Float_epsilon = DBL_EPSILON;
+
+// using Float = float;
+// const Float Float_epsilon = FLT_EPSILON;
 
 
 struct Vector
 {
-    double x;
-    double y;
-    double z;
+    Float x;
+    Float y;
+    Float z;
 };
 
 
@@ -32,28 +42,28 @@ Vector cross(const Vector v1, const Vector v2)
 
 
 __device__
-double dot(const Vector v1, const Vector v2)
+Float dot(const Vector v1, const Vector v2)
 {
     return v1.x*v2.x + v1.y*v2.y + v1.z*v1.z;
 }
 
 
 __device__
-double norm(const Vector v) { return sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
+Float norm(const Vector v) { return sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
 
 
 __device__
 Vector normalize(const Vector v)
 {
-    const double length = norm(v);
+    const Float length = norm(v);
     return Vector{ v.x/length, v.y/length, v.z/length};
 }
 
 
 __device__
-Vector operator*(const Vector v, const double s) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator*(const Vector v, const Float s) { return Vector{s*v.x, s*v.y, s*v.z}; }
 __device__
-Vector operator*(const double s, const Vector v) { return Vector{s*v.x, s*v.y, s*v.z}; }
+Vector operator*(const Float s, const Vector v) { return Vector{s*v.x, s*v.y, s*v.z}; }
 __device__
 Vector operator-(const Vector v1, const Vector v2) { return Vector{v1.x-v2.x, v1.y-v2.y, v1.z-v2.z}; }
 __device__
@@ -74,7 +84,7 @@ struct Photon
 
 
 __device__
-double pow2(const double d) { return d*d; }
+Float pow2(const Float d) { return d*d; }
 
 
 #define cuda_safe_call(ans) { gpu_assert((ans), __FILE__, __LINE__); }
@@ -122,39 +132,39 @@ void copy_from_gpu(T* cpu_data, const T* gpu_data, const int length)
 
 
 __device__
-double rayleigh(const double random_number)
+Float rayleigh(const Float random_number)
 {
-    const double q = 4.*random_number - 2.;
-    const double d = 1. + pow2(q);
-    const double u = pow(-q + sqrt(d), 1./3.);
-    return u - 1./u;
+    const Float q = Float(4.)*random_number - Float(2.);
+    const Float d = Float(1.) + pow2(q);
+    const Float u = pow(-q + sqrt(d), Float(1./3.));
+    return u - Float(1.)/u;
 }
 
 
 __device__
-double henyey(const double g, const double random_number)
+Float henyey(const Float g, const Float random_number)
 {
-    const double a = pow2(1. - pow2(g));
-    const double b = 2.*g*pow2(2.*random_number*g + 1. - g);
-    const double c = -g/2. - 1./(2.*g);
-    return -1.*(a/b) - c;
+    const Float a = pow2(Float(1.) - pow2(g));
+    const Float b = Float(2.)*g*pow2(Float(2.)*random_number*g + Float(1.) - g);
+    const Float c = -g/Float(2.) - Float(1.)/(Float(2.)*g);
+    return Float(-1.)*(a/b) - c;
 }
 
 
 __device__
-double sample_tau(const double random_number)
+Float sample_tau(const Float random_number)
 {
     // Prevent log(0) possibility.
-    return -1.*log(-random_number + 1. + DBL_EPSILON);
+    return Float(-1.)*log(-random_number + Float(1.) + Float_epsilon);
 }
 
 
 __device__
 void reset_photon(
         Photon& photon,
-        const double random_number_x, const double random_number_y,
-        const double x_size, const double y_size, const double z_size,
-        const double zenith_angle, const double azimuth_angle)
+        const Float random_number_x, const Float random_number_y,
+        const Float x_size, const Float y_size, const Float z_size,
+        const Float zenith_angle, const Float azimuth_angle)
 {
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
@@ -189,15 +199,15 @@ struct Random_number_generator
 __global__
 void ray_tracer_init_kernel(
         Photon* __restrict__ photons,
-        uint64_t* __restrict__ toa_down_count,
-        double x_size, double y_size, double z_size,
-        double dx_grid, double dy_grid, double dz_grid,
-        double zenith_angle, double azimuth_angle, 
+        Int* __restrict__ toa_down_count,
+        Float x_size, Float y_size, Float z_size,
+        Float dx_grid, Float dy_grid, Float dz_grid,
+        Float zenith_angle, Float azimuth_angle, 
         const int itot)
 {
     const int n = threadIdx.x;
 
-    Random_number_generator<double> rng(n);
+    Random_number_generator<Float> rng(n);
 
     reset_photon(
             photons[n], rng(), rng(),
@@ -215,42 +225,42 @@ __global__
 void ray_tracer_kernel(
         const int photons_to_shoot,
         Photon* __restrict__ photons,
-        uint64_t* __restrict__ n_photons_in, uint64_t* __restrict__ n_photons_out,
-        uint64_t* __restrict__ toa_down_count,
-        uint64_t* __restrict__ toa_up_count,
-        uint64_t* __restrict__ surface_down_direct_count,
-        uint64_t* __restrict__ surface_down_diffuse_count,
-        uint64_t* __restrict__ surface_up_count,
-        uint64_t* __restrict__ atmos_direct_count,
-        uint64_t* __restrict__ atmos_diffuse_count,
-        const double* __restrict__ k_ext, const double* __restrict__ ssa, const double* __restrict__ asy,
-        const double k_ext_null, const double k_ext_gas,
-        const double surface_albedo,
-        const double x_size, const double y_size, const double z_size,
-        const double dx_grid, const double dy_grid, const double dz_grid,
-        const double zenith_angle, const double azimuth_angle, 
+        Int* __restrict__ n_photons_in, Int* __restrict__ n_photons_out,
+        Int* __restrict__ toa_down_count,
+        Int* __restrict__ toa_up_count,
+        Int* __restrict__ surface_down_direct_count,
+        Int* __restrict__ surface_down_diffuse_count,
+        Int* __restrict__ surface_up_count,
+        Int* __restrict__ atmos_direct_count,
+        Int* __restrict__ atmos_diffuse_count,
+        const Float* __restrict__ k_ext, const Float* __restrict__ ssa, const Float* __restrict__ asy,
+        const Float k_ext_null, const Float k_ext_gas,
+        const Float surface_albedo,
+        const Float x_size, const Float y_size, const Float z_size,
+        const Float dx_grid, const Float dy_grid, const Float dz_grid,
+        const Float zenith_angle, const Float azimuth_angle, 
         const int itot, const int jtot)
 {
     bool photon_generation_completed = false;
 
     const int n = threadIdx.x;
 
-    Random_number_generator<double> rng(n + n_photons_in[n]);
+    Random_number_generator<Float> rng(n + n_photons_in[n]);
 
     // CvH: This range needs fixing.
     for (int ii=0; ii<112000; ++ii)
     {
-        const double dn = sample_tau(rng()) / k_ext_null;
-        double dx = photons[n].direction.x * dn;
-        double dy = photons[n].direction.y * dn;
-        double dz = photons[n].direction.z * dn;
+        const Float dn = sample_tau(rng()) / k_ext_null;
+        Float dx = photons[n].direction.x * dn;
+        Float dy = photons[n].direction.y * dn;
+        Float dz = photons[n].direction.z * dn;
 
         bool surface_exit = false;
         bool toa_exit = false;
 
         if ((photons[n].position.z + dz) <= 0.)
         {
-            const double fac = abs(photons[n].position.z / dz);
+            const Float fac = abs(photons[n].position.z / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
@@ -259,7 +269,7 @@ void ray_tracer_kernel(
         }
         else if ((photons[n].position.z + dz) >= z_size)
         {
-            const double fac = abs((z_size - photons[n].position.z) / dz);
+            const Float fac = abs((z_size - photons[n].position.z) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
@@ -310,12 +320,12 @@ void ray_tracer_kernel(
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     // Adding 0xffffffffffffffffULL is equal to subtracting one.
-                    atomicAdd(&n_photons_out[n], 0xffffffffffffffffULL);
+                    atomicAdd(&n_photons_out[n], Atomic_reduce_const);
                     atomicAdd(&surface_up_count[ij], 1);
                 }
 
-                const double mu_surface = sqrt(rng());
-                const double azimuth_surface = 2.*M_PI*rng();
+                const Float mu_surface = sqrt(rng());
+                const Float azimuth_surface = 2.*M_PI*rng();
 
                 photons[n].direction.x = mu_surface*sin(azimuth_surface);
                 photons[n].direction.y = mu_surface*cos(azimuth_surface);
@@ -375,7 +385,7 @@ void ray_tracer_kernel(
         else
         {
             // Handle the action.
-            const double random_number = rng();
+            const Float random_number = rng();
 
             // Null collision.
             if (random_number >= (k_ext[ijk] / k_ext_null))
@@ -385,8 +395,8 @@ void ray_tracer_kernel(
             else if (random_number <= ssa[ijk] * k_ext[ijk] / k_ext_null)
             {
                 const bool cloud_scatter = rng() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
-                const double cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
-                const double sin_scat = sqrt(1. - cos_scat*cos_scat);
+                const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
+                const Float sin_scat = sqrt(1. - cos_scat*cos_scat);
 
                 Vector t1{0., 0., 0.};
                 if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
@@ -406,7 +416,7 @@ void ray_tracer_kernel(
                 t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
                 Vector t2 = cross(photons[n].direction, t1);
 
-                const double phi = 2.*M_PI*rng();
+                const Float phi = 2.*M_PI*rng();
 
                 photons[n].direction = cos_scat*photons[n].direction
                         + sin_scat*(sin(phi)*t1 + cos(phi)*t2);
@@ -449,40 +459,40 @@ void ray_tracer_kernel(
     }
 }
 
-void run_ray_tracer(const uint64_t n_photons)
+void run_ray_tracer(const Int n_photons)
 {
     //// DEFINE INPUT ////
     // Grid properties.
-    const double dx_grid = 50.;
-    const double dy_grid = 50.;
-    const double dz_grid = 25.;
+    const Float dx_grid = 50.;
+    const Float dy_grid = 50.;
+    const Float dz_grid = 25.;
 
     const int itot = 128;
     const int jtot = 128;
     const int ktot = 128;
 
-    const double x_size = itot*dx_grid;
-    const double y_size = jtot*dy_grid;
-    const double z_size = ktot*dz_grid;
+    const Float x_size = itot*dx_grid;
+    const Float y_size = jtot*dy_grid;
+    const Float z_size = ktot*dz_grid;
 
     // Radiation properties.
-    const double surface_albedo = 0.2;
-    const double zenith_angle = 50.*(M_PI/180.);
-    const double azimuth_angle = 20.*(M_PI/180.);
+    const Float surface_albedo = 0.2;
+    const Float zenith_angle = 50.*(M_PI/180.);
+    const Float azimuth_angle = 20.*(M_PI/180.);
 
     // Input fields.
-    const double k_ext_gas = 1.e-4; // 3.e-4;
-    const double ssa_gas = 0.5;
-    const double asy_gas = 0.;
+    const Float k_ext_gas = 1.e-4; // 3.e-4;
+    const Float ssa_gas = 0.5;
+    const Float asy_gas = 0.;
 
-    const double k_ext_cloud = 5.e-3;
-    const double ssa_cloud = 0.9;
-    const double asy_cloud = 0.85;
+    const Float k_ext_cloud = 5.e-3;
+    const Float ssa_cloud = 0.9;
+    const Float asy_cloud = 0.85;
 
     // Create the spatial fields.
-    std::vector<double> k_ext(itot*jtot*ktot);
-    std::vector<double> ssa(itot*jtot*ktot);
-    std::vector<double> asy(itot*jtot*ktot);
+    std::vector<Float> k_ext(itot*jtot*ktot);
+    std::vector<Float> ssa(itot*jtot*ktot);
+    std::vector<Float> asy(itot*jtot*ktot);
 
     // First add the gases over the entire domain.
     std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
@@ -507,37 +517,37 @@ void run_ray_tracer(const uint64_t n_photons)
             }
 
     // Set the step size for the transport solver to the maximum extinction coefficient.
-    const double k_ext_null = *std::max_element(k_ext.begin(), k_ext.end());
+    const Float k_ext_null = *std::max_element(k_ext.begin(), k_ext.end());
 
 
     //// PREPARE OUTPUT ARRAYS ////
-    std::vector<uint64_t> surface_down_direct_count(itot*jtot);
-    std::vector<uint64_t> surface_down_diffuse_count(itot*jtot);
-    std::vector<uint64_t> surface_up_count(itot*jtot);
-    std::vector<uint64_t> toa_down_count(itot*jtot);
-    std::vector<uint64_t> toa_up_count(itot*jtot);
-    std::vector<uint64_t> atmos_direct_count(itot*jtot*ktot);
-    std::vector<uint64_t> atmos_diffuse_count(itot*jtot*ktot);
+    std::vector<Int> surface_down_direct_count(itot*jtot);
+    std::vector<Int> surface_down_diffuse_count(itot*jtot);
+    std::vector<Int> surface_up_count(itot*jtot);
+    std::vector<Int> toa_down_count(itot*jtot);
+    std::vector<Int> toa_up_count(itot*jtot);
+    std::vector<Int> atmos_direct_count(itot*jtot*ktot);
+    std::vector<Int> atmos_diffuse_count(itot*jtot*ktot);
 
 
     //// COPY THE DATA TO THE GPU.
     // Input array.
-    double* k_ext_gpu = allocate_gpu<double>(itot*jtot*ktot);
-    double* ssa_gpu = allocate_gpu<double>(itot*jtot*ktot);
-    double* asy_gpu = allocate_gpu<double>(itot*jtot*ktot);
+    Float* k_ext_gpu = allocate_gpu<Float>(itot*jtot*ktot);
+    Float* ssa_gpu = allocate_gpu<Float>(itot*jtot*ktot);
+    Float* asy_gpu = allocate_gpu<Float>(itot*jtot*ktot);
 
     copy_to_gpu(k_ext_gpu, k_ext.data(), itot*jtot*ktot);
     copy_to_gpu(ssa_gpu, ssa.data(), itot*jtot*ktot);
     copy_to_gpu(asy_gpu, asy.data(), itot*jtot*ktot);
 
     // Output arrays. Copy them in order to enable restarts later.
-    uint64_t* surface_down_direct_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
-    uint64_t* surface_down_diffuse_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
-    uint64_t* surface_up_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
-    uint64_t* toa_down_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
-    uint64_t* toa_up_count_gpu = allocate_gpu<uint64_t>(itot*jtot);
-    uint64_t* atmos_direct_count_gpu = allocate_gpu<uint64_t>(itot*jtot*ktot);
-    uint64_t* atmos_diffuse_count_gpu = allocate_gpu<uint64_t>(itot*jtot*ktot);
+    Int* surface_down_direct_count_gpu = allocate_gpu<Int>(itot*jtot);
+    Int* surface_down_diffuse_count_gpu = allocate_gpu<Int>(itot*jtot);
+    Int* surface_up_count_gpu = allocate_gpu<Int>(itot*jtot);
+    Int* toa_down_count_gpu = allocate_gpu<Int>(itot*jtot);
+    Int* toa_up_count_gpu = allocate_gpu<Int>(itot*jtot);
+    Int* atmos_direct_count_gpu = allocate_gpu<Int>(itot*jtot*ktot);
+    Int* atmos_diffuse_count_gpu = allocate_gpu<Int>(itot*jtot*ktot);
 
     copy_to_gpu(surface_down_direct_count_gpu, surface_down_direct_count.data(), itot*jtot);
     copy_to_gpu(surface_down_diffuse_count_gpu, surface_down_diffuse_count.data(), itot*jtot);
@@ -552,11 +562,11 @@ void run_ray_tracer(const uint64_t n_photons)
     constexpr int block_size = 512;
     Photon* photons = allocate_gpu<Photon>(block_size);
 
-    std::vector<uint64_t> n_photons_in(block_size, 1);
-    std::vector<uint64_t> n_photons_out(block_size, 0);
+    std::vector<Int> n_photons_in(block_size, 1);
+    std::vector<Int> n_photons_out(block_size, 0);
 
-    uint64_t* n_photons_in_gpu = allocate_gpu<uint64_t>(block_size);
-    uint64_t* n_photons_out_gpu = allocate_gpu<uint64_t>(block_size);
+    Int* n_photons_in_gpu = allocate_gpu<Int>(block_size);
+    Int* n_photons_out_gpu = allocate_gpu<Int>(block_size);
 
     copy_to_gpu(n_photons_in_gpu, n_photons_in.data(), block_size);
     copy_to_gpu(n_photons_out_gpu, n_photons_out.data(), block_size);
@@ -606,9 +616,9 @@ void run_ray_tracer(const uint64_t n_photons)
     copy_from_gpu(atmos_direct_count.data(), atmos_direct_count_gpu, itot*jtot*ktot);
     copy_from_gpu(atmos_diffuse_count.data(), atmos_diffuse_count_gpu, itot*jtot*ktot);
 
-    uint64_t toa_down = 0;
-    uint64_t photons_in = 0;
-    uint64_t photons_out = 0;
+    Int toa_down = 0;
+    Int photons_in = 0;
+    Int photons_out = 0;
     for (int j=0; j<jtot; ++j)
         for (int i=0; i<itot; ++i)
             toa_down += toa_down_count[i+j*itot];
@@ -627,7 +637,7 @@ void run_ray_tracer(const uint64_t n_photons)
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
 
         if (binary_file)
-            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(uint64_t));
+            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(Int));
         else
         {
             std::string error = "Cannot write file \"" + name + ".bin\"";
@@ -653,7 +663,7 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    const uint64_t n_photons = std::stoi(argv[1]) * 100000;
+    const Int n_photons = std::stoi(argv[1]) * 100000;
 
     run_ray_tracer(n_photons);
 
