@@ -164,14 +164,14 @@ void reset_photon(
         Photon& photon,
         const Float random_number_x, const Float random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
-        const Float zenith_angle, const Float azimuth_angle)
+        const Float dir_x, const Float dir_y, const float dir_z)
 {
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
     photon.position.z = z_size;
-    photon.direction.x = -sin(zenith_angle) * cos(azimuth_angle);
-    photon.direction.y = -sin(zenith_angle) * sin(azimuth_angle);
-    photon.direction.z = -cos(zenith_angle);
+    photon.direction.x = dir_x;
+    photon.direction.y = dir_y;
+    photon.direction.z = dir_z;
     photon.kind = Photon_kind::Direct;
     photon.status = Photon_status::Enabled;
 }
@@ -200,9 +200,9 @@ __global__
 void ray_tracer_init_kernel(
         Photon* __restrict__ photons,
         Int* __restrict__ toa_down_count,
-        Float x_size, Float y_size, Float z_size,
-        Float dx_grid, Float dy_grid, Float dz_grid,
-        Float zenith_angle, Float azimuth_angle, 
+        const Float x_size, const Float y_size, const Float z_size,
+        const Float dx_grid, const Float dy_grid, const Float dz_grid,
+        const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot)
 {
     const int n = threadIdx.x;
@@ -212,7 +212,7 @@ void ray_tracer_init_kernel(
     reset_photon(
             photons[n], rng(), rng(),
             x_size, y_size, z_size,
-            zenith_angle, azimuth_angle);
+            dir_x, dir_y, dir_z);
 
     const int i = photons[n].position.x / dx_grid;
     const int j = photons[n].position.y / dy_grid;
@@ -225,7 +225,7 @@ __global__
 void ray_tracer_kernel(
         const int photons_to_shoot,
         Photon* __restrict__ photons,
-        Int* __restrict__ n_photons_in, Int* __restrict__ n_photons_out,
+        Int* n_photons_in, Int* n_photons_out,
         Int* __restrict__ toa_down_count,
         Int* __restrict__ toa_up_count,
         Int* __restrict__ surface_down_direct_count,
@@ -238,18 +238,17 @@ void ray_tracer_kernel(
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
-        const Float zenith_angle, const Float azimuth_angle, 
+        const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot, const int jtot)
 {
-    bool photon_generation_completed = false;
-
     const int n = threadIdx.x;
 
-    Random_number_generator<Float> rng(n + n_photons_in[n]);
+    Random_number_generator<Float> rng(n + n_photons_in[0]);//n_photons_in);
 
     // CvH: This range needs fixing.
-    for (int ii=0; ii<112000; ++ii)
+    while ((*n_photons_in < photons_to_shoot) || (*n_photons_in > *n_photons_out))
     {
+        const bool photon_generation_completed = *n_photons_in >= photons_to_shoot;
         const Float dn = sample_tau(rng()) / k_ext_null;
         Float dx = photons[n].direction.x * dn;
         Float dy = photons[n].direction.y * dn;
@@ -304,13 +303,13 @@ void ray_tracer_kernel(
             if (photons[n].kind == Photon_kind::Direct
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(&n_photons_out[n], 1);
+                atomicAdd(n_photons_out, 1);
                 atomicAdd(&surface_down_direct_count[ij], 1);
             }
             else if (photons[n].kind == Photon_kind::Diffuse
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(&n_photons_out[n], 1);
+                atomicAdd(n_photons_out, 1);
                 atomicAdd(&surface_down_diffuse_count[ij], 1);
             }
 
@@ -320,7 +319,7 @@ void ray_tracer_kernel(
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     // Adding 0xffffffffffffffffULL is equal to subtracting one.
-                    atomicAdd(&n_photons_out[n], Atomic_reduce_const);
+                    atomicAdd(n_photons_out, Atomic_reduce_const);
                     atomicAdd(&surface_up_count[ij], 1);
                 }
 
@@ -337,14 +336,14 @@ void ray_tracer_kernel(
                 reset_photon(
                         photons[n], rng(), rng(),
                         x_size, y_size, z_size,
-                        zenith_angle, azimuth_angle);
+                        dir_x, dir_y, dir_z);
 
                 if (photon_generation_completed)
                     photons[n].status = Photon_status::Disabled;
 
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(&n_photons_in[n], 1);
+                    atomicAdd(n_photons_in, 1);
 
                     const int i_new = photons[n].position.x / dx_grid;
                     const int j_new = photons[n].position.y / dy_grid;
@@ -358,14 +357,14 @@ void ray_tracer_kernel(
         {
             if (photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(&n_photons_out[n], 1);
+                atomicAdd(n_photons_out, 1);
                 atomicAdd(&toa_up_count[ij], 1);
             }
 
             reset_photon(
                     photons[n], rng(), rng(),
                     x_size, y_size, z_size,
-                    zenith_angle, azimuth_angle);
+                    dir_x, dir_y, dir_z);
 
 
             if (photon_generation_completed)
@@ -373,7 +372,7 @@ void ray_tracer_kernel(
 
             if (photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(&n_photons_in[n], 1);
+                atomicAdd(n_photons_in, 1);
     
                 const int i_new = photons[n].position.x / dx_grid;
                 const int j_new = photons[n].position.y / dy_grid;
@@ -428,7 +427,7 @@ void ray_tracer_kernel(
             {
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(&n_photons_out[n], 1);
+                    atomicAdd(n_photons_out, 1);
 
                     if (photons[n].kind == Photon_kind::Direct)
                         atomicAdd(&atmos_direct_count[ijk], 1);
@@ -439,14 +438,14 @@ void ray_tracer_kernel(
                 reset_photon(
                         photons[n], rng(), rng(),
                         x_size, y_size, z_size,
-                        zenith_angle, azimuth_angle);
+                        dir_x, dir_y, dir_z);
 
                 if (photon_generation_completed)
                     photons[n].status = Photon_status::Disabled;
 
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(&n_photons_in[n], 1);
+                    atomicAdd(n_photons_in, 1);
 
                     const int i_new = photons[n].position.x / dx_grid;
                     const int j_new = photons[n].position.y / dy_grid;
@@ -456,6 +455,7 @@ void ray_tracer_kernel(
                 }
             }
         }
+    
     }
 }
 
@@ -479,6 +479,10 @@ void run_ray_tracer(const Int n_photons)
     const Float surface_albedo = 0.2;
     const Float zenith_angle = 50.*(M_PI/180.);
     const Float azimuth_angle = 20.*(M_PI/180.);
+    
+    const Float dir_x = -sin(zenith_angle) * cos(azimuth_angle);
+    const Float dir_y = -sin(zenith_angle) * sin(azimuth_angle);
+    const Float dir_z = -cos(zenith_angle);
 
     // Input fields.
     const Float k_ext_gas = 1.e-4; // 3.e-4;
@@ -562,14 +566,15 @@ void run_ray_tracer(const Int n_photons)
     constexpr int block_size = 512;
     Photon* photons = allocate_gpu<Photon>(block_size);
 
-    std::vector<Int> n_photons_in(block_size, 1);
-    std::vector<Int> n_photons_out(block_size, 0);
+    Int n_photons_in = block_size;
+    Int n_photons_out = 0;
+    
+    //n_photons_in = block_size;
+    Int* n_photons_in_gpu = allocate_gpu<Int>(1);
+    Int* n_photons_out_gpu = allocate_gpu<Int>(1);
 
-    Int* n_photons_in_gpu = allocate_gpu<Int>(block_size);
-    Int* n_photons_out_gpu = allocate_gpu<Int>(block_size);
-
-    copy_to_gpu(n_photons_in_gpu, n_photons_in.data(), block_size);
-    copy_to_gpu(n_photons_out_gpu, n_photons_out.data(), block_size);
+    copy_to_gpu(n_photons_in_gpu, &n_photons_in, 1);
+    copy_to_gpu(n_photons_out_gpu, &n_photons_out, 1);
 
     dim3 grid{1}, block{block_size};
     
@@ -580,7 +585,7 @@ void run_ray_tracer(const Int n_photons)
             toa_down_count_gpu,
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
-            zenith_angle, azimuth_angle,
+            dir_x, dir_y, dir_z,
             itot);
     
     ray_tracer_kernel<<<grid, block>>>(
@@ -593,7 +598,7 @@ void run_ray_tracer(const Int n_photons)
             k_ext_null, k_ext_gas, surface_albedo,
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
-            zenith_angle, azimuth_angle,
+            dir_x, dir_y, dir_z,
             itot, jtot);
 
     cuda_safe_call(cudaDeviceSynchronize());
@@ -605,8 +610,8 @@ void run_ray_tracer(const Int n_photons)
 
 
     //// COPY OUTPUT BACK TO CPU ////
-    copy_from_gpu(n_photons_in.data(), n_photons_in_gpu, block_size);
-    copy_from_gpu(n_photons_out.data(), n_photons_out_gpu, block_size);
+    copy_from_gpu(&n_photons_in, n_photons_in_gpu, 1);
+    copy_from_gpu(&n_photons_out, n_photons_out_gpu, 1);
 
     copy_from_gpu(surface_down_direct_count.data(), surface_down_direct_count_gpu, itot*jtot);
     copy_from_gpu(surface_down_diffuse_count.data(), surface_down_diffuse_count_gpu, itot*jtot);
@@ -617,18 +622,10 @@ void run_ray_tracer(const Int n_photons)
     copy_from_gpu(atmos_diffuse_count.data(), atmos_diffuse_count_gpu, itot*jtot*ktot);
 
     Int toa_down = 0;
-    Int photons_in = 0;
-    Int photons_out = 0;
     for (int j=0; j<jtot; ++j)
         for (int i=0; i<itot; ++i)
             toa_down += toa_down_count[i+j*itot];
-    
-    for (int n=0; n<block_size; ++n)
-    {
-        photons_in += n_photons_in[n];
-        photons_out += n_photons_out[n];
-    }
-    std::cout << "Photons (in, out, toa): " << photons_in << ", " << photons_out << ", " << toa_down << std::endl;
+    std::cout << "Photons (in, out, toa): " << n_photons_in << ", " << n_photons_out << ", " << toa_down << std::endl;
 
 
     //// SAVE THE OUTPUT TO DISK ////
@@ -652,6 +649,7 @@ void run_ray_tracer(const Int n_photons)
     save_binary("surface_up", surface_up_count.data(), itot*jtot);
     save_binary("atmos_direct", atmos_direct_count.data(), itot*jtot*ktot);
     save_binary("atmos_diffuse", atmos_diffuse_count.data(), itot*jtot*ktot);
+    
 }
 
 
