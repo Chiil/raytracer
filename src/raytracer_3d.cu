@@ -188,8 +188,8 @@ struct Random_number_generator
         curand_init(tid, tid, 0, &state);
     }
 
-    __device__ T
-    operator ()(void)
+    __device__
+    T operator ()(void)
     {
         return curand_uniform(&state);
     }
@@ -245,9 +245,8 @@ void ray_tracer_kernel(
 {
     const int n = threadIdx.x;
 
-    Random_number_generator<Float> rng(n + n_photons_in[0]);//n_photons_in);
+    Random_number_generator<Float> rng(n + *n_photons_in);
 
-    // CvH: This range needs fixing.
     while ((*n_photons_in < photons_to_shoot) || (*n_photons_in > *n_photons_out))
     {
         const bool photon_generation_completed = *n_photons_in >= photons_to_shoot;
@@ -259,7 +258,7 @@ void ray_tracer_kernel(
         bool surface_exit = false;
         bool toa_exit = false;
 
-        if ((photons[n].position.z + dz) <= 0.)
+        if ((photons[n].position.z + dz) <= Float(0.))
         {
             const Float fac = abs(photons[n].position.z / dz);
             dx *= fac;
@@ -284,12 +283,12 @@ void ray_tracer_kernel(
 
         // Cyclic boundary condition in x.
         photons[n].position.x = fmod(photons[n].position.x, x_size);
-        if (photons[n].position.x < 0.)
+        if (photons[n].position.x < Float(0.))
             photons[n].position.x += x_size;
 
         // Cyclic boundary condition in y.
         photons[n].position.y = fmod(photons[n].position.y, y_size);
-        if (photons[n].position.y < 0.)
+        if (photons[n].position.y < Float(0.))
             photons[n].position.y += y_size;
 
         // Handle the surface and top exits.
@@ -457,7 +456,6 @@ void ray_tracer_kernel(
                 }
             }
         }
-    
     }
 }
 
@@ -650,7 +648,6 @@ void run_ray_tracer(const Int n_photons)
     save_binary("surface_up", surface_up_count.data(), itot*jtot);
     save_binary("atmos_direct", atmos_direct_count.data(), itot*jtot*ktot);
     save_binary("atmos_diffuse", atmos_diffuse_count.data(), itot*jtot*ktot);
-    
 }
 
 
