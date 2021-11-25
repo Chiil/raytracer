@@ -398,25 +398,25 @@ void ray_tracer_kernel(
                 const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
                 const Float sin_scat = sqrt(1. - cos_scat*cos_scat);
 
-                Vector t1{0., 0., 0.};
+                Vector t1{Float(0.), Float(0.), Float(0.)};
                 if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
                 {
                     if (fabs(photons[n].direction.x) < fabs(photons[n].direction.z))
-                        t1.x = 1;
+                        t1.x = Float(1.);
                     else
-                        t1.z = 1;
+                        t1.z = Float(1.);
                 }
                 else
                 {
                     if (fabs(photons[n].direction.y) < fabs(photons[n].direction.z))
-                        t1.y = 1;
+                        t1.y = Float(1.);
                     else
-                        t1.z = 1;
+                        t1.z = Float(1.);
                 }
                 t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
                 Vector t2 = cross(photons[n].direction, t1);
 
-                const Float phi = 2.*M_PI*rng();
+                const Float phi = Float(2.*M_PI)*rng();
 
                 photons[n].direction = cos_scat*photons[n].direction
                         + sin_scat*(sin(phi)*t1 + cos(phi)*t2);
