@@ -16,15 +16,15 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 // using Int = unsigned int;
 // const Int Atomic_reduce_const = (Int)(-1);
 
-// using Float = double;
-// const Float Float_epsilon = DBL_EPSILON;
-// constexpr int block_size = 768;
-// constexpr int grid_size = 64;
+using Float = double;
+const Float Float_epsilon = DBL_EPSILON;
+constexpr int block_size = 768;
+constexpr int grid_size = 64;
 
-using Float = float;
-const Float Float_epsilon = FLT_EPSILON;
-constexpr int block_size = 1024;
-constexpr int grid_size = 32;
+// using Float = float;
+// const Float Float_epsilon = FLT_EPSILON;
+// constexpr int block_size = 1024;
+// constexpr int grid_size = 32;
 
 
 struct Vector
