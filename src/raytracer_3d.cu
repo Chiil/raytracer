@@ -332,7 +332,7 @@ void ray_tracer_kernel(
 
                 photons[n].direction.x = mu_surface*sin(azimuth_surface);
                 photons[n].direction.y = mu_surface*cos(azimuth_surface);
-                photons[n].direction.z = sqrt(Float(1.) - mu_surface*mu_surface);
+                photons[n].direction.z = sqrt(Float(1.) - mu_surface*mu_surface + Float_epsilon);
                 photons[n].kind = Photon_kind::Diffuse;
             }
             else
@@ -399,7 +399,7 @@ void ray_tracer_kernel(
             {
                 const bool cloud_scatter = rng() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
                 const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
-                const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat);
+                const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
                 Vector t1{Float(0.), Float(0.), Float(0.)};
                 if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
