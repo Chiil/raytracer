@@ -188,7 +188,7 @@ void run_ray_tracer(const uint64_t n_photons)
     const double ssa_gas = 0.5;
     const double asy_gas = 0.;
 
-    const double k_ext_cloud = 2.e-2;
+    const double k_ext_cloud = 5.e-3;
     const double ssa_cloud = 0.9;
     const double asy_cloud = 0.85;
 

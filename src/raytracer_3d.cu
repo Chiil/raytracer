@@ -16,13 +16,15 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 // using Int = unsigned int;
 // const Int Atomic_reduce_const = (Int)(-1);
 
-using Float = double;
-const Float Float_epsilon = DBL_EPSILON;
-constexpr int block_size = 768;
+// using Float = double;
+// const Float Float_epsilon = DBL_EPSILON;
+// constexpr int block_size = 768;
+// constexpr int grid_size = 64;
 
-// using Float = float;
-// const Float Float_epsilon = FLT_EPSILON;
-// constexpr int block_size = 1024;
+using Float = float;
+const Float Float_epsilon = FLT_EPSILON;
+constexpr int block_size = 1024;
+constexpr int grid_size = 32;
 
 
 struct Vector
@@ -207,7 +209,7 @@ void ray_tracer_init_kernel(
         const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot)
 {
-    const int n = threadIdx.x;
+    const int n = blockDim.x * blockIdx.x + threadIdx.x;
 
     Random_number_generator<Float> rng(n);
 
@@ -243,11 +245,14 @@ void ray_tracer_kernel(
         const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot, const int jtot)
 {
-    const int n = threadIdx.x;
+    const int n = blockDim.x * blockIdx.x + threadIdx.x;
+    const int n_rnd = n + *n_photons_in;
 
-    Random_number_generator<Float> rng(n + *n_photons_in);
+    Random_number_generator<Float> rng(n_rnd);
+    Int n_photons_in_local = 1;//blockDim.x;
+    Int n_photons_out_local = 0;
 
-    while ((*n_photons_in < photons_to_shoot) || (*n_photons_in > *n_photons_out))
+    while ((*n_photons_in < photons_to_shoot) || (n_photons_in_local > n_photons_out_local))
     {
         const bool photon_generation_completed = *n_photons_in >= photons_to_shoot;
         const Float dn = sample_tau(rng()) / k_ext_null;
@@ -304,13 +309,13 @@ void ray_tracer_kernel(
             if (photons[n].kind == Photon_kind::Direct
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
+                atomicAdd(n_photons_out, 1); ++n_photons_out_local;
                 atomicAdd(&surface_down_direct_count[ij], 1);
             }
             else if (photons[n].kind == Photon_kind::Diffuse
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
+                atomicAdd(n_photons_out, 1); ++n_photons_out_local;
                 atomicAdd(&surface_down_diffuse_count[ij], 1);
             }
 
@@ -320,7 +325,7 @@ void ray_tracer_kernel(
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     // Adding 0xffffffffffffffffULL is equal to subtracting one.
-                    atomicAdd(n_photons_out, Atomic_reduce_const);
+                    atomicAdd(n_photons_out, Atomic_reduce_const); --n_photons_out_local;
                     atomicAdd(&surface_up_count[ij], 1);
                 }
 
@@ -344,7 +349,7 @@ void ray_tracer_kernel(
 
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(n_photons_in, 1);
+                    atomicAdd(n_photons_in, 1); ++n_photons_in_local;
 
                     const int i_new = photons[n].position.x / dx_grid;
                     const int j_new = photons[n].position.y / dy_grid;
@@ -358,7 +363,7 @@ void ray_tracer_kernel(
         {
             if (photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
+                atomicAdd(n_photons_out, 1); ++n_photons_out_local;
                 atomicAdd(&toa_up_count[ij], 1);
             }
 
@@ -373,7 +378,7 @@ void ray_tracer_kernel(
 
             if (photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_in, 1);
+                atomicAdd(n_photons_in, 1); ++n_photons_in_local;
     
                 const int i_new = photons[n].position.x / dx_grid;
                 const int j_new = photons[n].position.y / dy_grid;
@@ -428,7 +433,7 @@ void ray_tracer_kernel(
             {
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(n_photons_out, 1);
+                    atomicAdd(n_photons_out, 1); ++n_photons_out_local;
 
                     if (photons[n].kind == Photon_kind::Direct)
                         atomicAdd(&atmos_direct_count[ijk], 1);
@@ -446,7 +451,7 @@ void ray_tracer_kernel(
 
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(n_photons_in, 1);
+                    atomicAdd(n_photons_in, 1); ++n_photons_in_local;
 
                     const int i_new = photons[n].position.x / dx_grid;
                     const int j_new = photons[n].position.y / dy_grid;
@@ -563,19 +568,18 @@ void run_ray_tracer(const Int n_photons)
 
 
     //// RUN THE RAY TRACER ////
-    Photon* photons = allocate_gpu<Photon>(block_size);
+    Photon* photons = allocate_gpu<Photon>(grid_size*block_size);
 
-    Int n_photons_in = block_size;
+    Int n_photons_in = grid_size*block_size;
     Int n_photons_out = 0;
     
-    //n_photons_in = block_size;
     Int* n_photons_in_gpu = allocate_gpu<Int>(1);
     Int* n_photons_out_gpu = allocate_gpu<Int>(1);
 
     copy_to_gpu(n_photons_in_gpu, &n_photons_in, 1);
     copy_to_gpu(n_photons_out_gpu, &n_photons_out, 1);
 
-    dim3 grid{1}, block{block_size};
+    dim3 grid{grid_size}, block{block_size};
     
     auto start = std::chrono::high_resolution_clock::now();
 
