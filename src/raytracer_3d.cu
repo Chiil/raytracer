@@ -184,20 +184,29 @@ void reset_photon(
 template<typename T>
 struct Random_number_generator
 {
-    __device__
-    Random_number_generator(unsigned int tid)
+    __device__ Random_number_generator(unsigned int tid)
     {
         curand_init(tid, tid, 0, &state);
     }
 
-    __device__
-    T operator ()(void)
-    {
-        return curand_uniform(&state);
-    }
+    __device__ T operator()();
 
     curandState state;
 };
+
+
+template<>
+__device__ double Random_number_generator<double>::operator()()
+{
+    return curand_uniform_double(&state);
+}
+
+
+template<>
+__device__ float Random_number_generator<float>::operator()()
+{
+    return curand_uniform(&state);
+}
 
 
 __global__
