@@ -164,11 +164,13 @@ Float sample_tau(const Float random_number)
 
 
 __device__
-void reset_photon(
-        Photon& photon,
+inline void reset_photon(
+        Photon& photon, Int* __restrict__ const n_photons_in, Int* __restrict__ const toa_down_count,
         const Float random_number_x, const Float random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
-        const Float dir_x, const Float dir_y, const float dir_z)
+        const Float dx_grid, const Float dy_grid, const Float dz_grid,
+        const Float dir_x, const Float dir_y, const float dir_z,
+        const bool generation_completed, const int itot)
 {
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
@@ -177,7 +179,18 @@ void reset_photon(
     photon.direction.y = dir_y;
     photon.direction.z = dir_z;
     photon.kind = Photon_kind::Direct;
-    photon.status = Photon_status::Enabled;
+    photon.status = generation_completed ? Photon_status::Disabled : Photon_status::Enabled;
+
+    if (!generation_completed)
+    {
+        atomicAdd(n_photons_in, 1);
+
+        const int i = photon.position.x / dx_grid;
+        const int j = photon.position.y / dy_grid;
+        const int ij = i + j*itot;
+
+        atomicAdd(&toa_down_count[ij], 1);
+    }
 }
 
 
@@ -211,8 +224,7 @@ __device__ float Random_number_generator<float>::operator()()
 
 __global__
 void ray_tracer_init_kernel(
-        Photon* __restrict__ photons,
-        Int* __restrict__ toa_down_count,
+        Photon* __restrict__ photons, Int* n_photons_in, Int* __restrict__ toa_down_count,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const Float dir_z, 
@@ -222,16 +234,15 @@ void ray_tracer_init_kernel(
 
     Random_number_generator<Float> rng(n);
 
+    const bool completed = false;
+
     reset_photon(
-            photons[n], rng(), rng(),
+            photons[n], n_photons_in, toa_down_count,
+            rng(), rng(),
             x_size, y_size, z_size,
-            dir_x, dir_y, dir_z);
-
-    const int i = photons[n].position.x / dx_grid;
-    const int j = photons[n].position.y / dy_grid;
-    const int ij = i + j*itot;
-
-    atomicAdd(&toa_down_count[ij], 1);
+            dx_grid, dy_grid, dz_grid,
+            dir_x, dir_y, dir_z,
+            completed, itot);
 }
 
 __global__
@@ -347,23 +358,12 @@ void ray_tracer_kernel(
             else
             {
                 reset_photon(
-                        photons[n], rng(), rng(),
+                        photons[n], n_photons_in, toa_down_count,
+                        rng(), rng(),
                         x_size, y_size, z_size,
-                        dir_x, dir_y, dir_z);
-
-                if (photon_generation_completed)
-                    photons[n].status = Photon_status::Disabled;
-
-                if (photons[n].status == Photon_status::Enabled)
-                {
-                    atomicAdd(n_photons_in, 1);
-
-                    const int i_new = photons[n].position.x / dx_grid;
-                    const int j_new = photons[n].position.y / dy_grid;
-                    const int ij_new = i_new + j_new*itot;
-
-                    atomicAdd(&toa_down_count[ij_new], 1);
-                }
+                        dx_grid, dy_grid, dz_grid,
+                        dir_x, dir_y, dir_z,
+                        photon_generation_completed, itot);
             }
         }
         else if (toa_exit)
@@ -375,24 +375,12 @@ void ray_tracer_kernel(
             }
 
             reset_photon(
-                    photons[n], rng(), rng(),
+                    photons[n], n_photons_in, toa_down_count,
+                    rng(), rng(),
                     x_size, y_size, z_size,
-                    dir_x, dir_y, dir_z);
-
-
-            if (photon_generation_completed)
-                photons[n].status = Photon_status::Disabled;
-
-            if (photons[n].status == Photon_status::Enabled)
-            {
-                atomicAdd(n_photons_in, 1);
-    
-                const int i_new = photons[n].position.x / dx_grid;
-                const int j_new = photons[n].position.y / dy_grid;
-                const int ij_new = i_new + j_new*itot;
-
-                atomicAdd(&toa_down_count[ij_new], 1);
-            }
+                    dx_grid, dy_grid, dz_grid,
+                    dir_x, dir_y, dir_z,
+                    photon_generation_completed, itot);
         }
         else
         {
@@ -449,23 +437,12 @@ void ray_tracer_kernel(
                 }
 
                 reset_photon(
-                        photons[n], rng(), rng(),
+                        photons[n], n_photons_in, toa_down_count,
+                        rng(), rng(),
                         x_size, y_size, z_size,
-                        dir_x, dir_y, dir_z);
-
-                if (photon_generation_completed)
-                    photons[n].status = Photon_status::Disabled;
-
-                if (photons[n].status == Photon_status::Enabled)
-                {
-                    atomicAdd(n_photons_in, 1);
-
-                    const int i_new = photons[n].position.x / dx_grid;
-                    const int j_new = photons[n].position.y / dy_grid;
-                    const int ij_new = i_new + j_new*itot;
-
-                    atomicAdd(&toa_down_count[ij_new], 1);
-                }
+                        dx_grid, dy_grid, dz_grid,
+                        dir_x, dir_y, dir_z,
+                        photon_generation_completed, itot);
             }
         }
     }
@@ -577,7 +554,7 @@ void run_ray_tracer(const Int n_photons)
     //// RUN THE RAY TRACER ////
     Photon* photons = allocate_gpu<Photon>(grid_size*block_size);
 
-    Int n_photons_in = grid_size*block_size;
+    Int n_photons_in = 0;
     Int n_photons_out = 0;
     
     Int* n_photons_in_gpu = allocate_gpu<Int>(1);
@@ -591,8 +568,7 @@ void run_ray_tracer(const Int n_photons)
     auto start = std::chrono::high_resolution_clock::now();
 
     ray_tracer_init_kernel<<<grid, block>>>(
-            photons,
-            toa_down_count_gpu,
+            photons, n_photons_in_gpu, toa_down_count_gpu,
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
