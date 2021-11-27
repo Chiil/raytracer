@@ -223,7 +223,7 @@ __device__ float Random_number_generator<float>::operator()()
 
 __global__
 void ray_tracer_kernel(
-        const int photons_to_shoot,
+        const Int photons_to_shoot,
         Photon* __restrict__ photons,
         Int* n_photons_in, Int* n_photons_out,
         Int* __restrict__ toa_down_count,
