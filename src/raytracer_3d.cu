@@ -23,8 +23,8 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 
 using Float = float;
 const Float Float_epsilon = FLT_EPSILON;
-constexpr int block_size = 1024;
-constexpr int grid_size = 32;
+constexpr int block_size = 768;
+constexpr int grid_size = 40;
 
 
 struct Vector
