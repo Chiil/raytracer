@@ -16,15 +16,15 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 // using Int = unsigned int;
 // const Int Atomic_reduce_const = (Int)(-1);
 
-using Float = double;
-const Float Float_epsilon = DBL_EPSILON;
-constexpr int block_size = 768;
-constexpr int grid_size = 64;
+// using Float = double;
+// const Float Float_epsilon = DBL_EPSILON;
+// constexpr int block_size = 768;
+// constexpr int grid_size = 64;
 
-// using Float = float;
-// const Float Float_epsilon = FLT_EPSILON;
-// constexpr int block_size = 1024;
-// constexpr int grid_size = 32;
+using Float = float;
+const Float Float_epsilon = FLT_EPSILON;
+constexpr int block_size = 1024;
+constexpr int grid_size = 32;
 
 
 struct Vector
@@ -164,13 +164,22 @@ Float sample_tau(const Float random_number)
 
 
 __device__
+inline int float_to_int(const float s_size, const float ds, const int ntot_max)
+{
+    const int ntot = static_cast<int>(s_size / ds);
+    return ntot < ntot_max ? ntot : ntot_max-1;
+}
+
+
+__device__
 inline void reset_photon(
         Photon& photon, Int* __restrict__ const n_photons_in, Int* __restrict__ const toa_down_count,
         const Float random_number_x, const Float random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const float dir_z,
-        const bool generation_completed, const int itot)
+        const bool generation_completed,
+        const int itot, const int jtot)
 {
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
@@ -187,8 +196,8 @@ inline void reset_photon(
     {
         atomicAdd(n_photons_in, 1);
 
-        const int i = photon.position.x / dx_grid;
-        const int j = photon.position.y / dy_grid;
+        const int i = float_to_int(photon.position.x, dx_grid, itot);
+        const int j = float_to_int(photon.position.y, dy_grid, jtot);
         const int ij = i + j*itot;
 
         atomicAdd(&toa_down_count[ij], 1);
@@ -242,7 +251,7 @@ void ray_tracer_kernel(
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const Float dir_z, 
-        const int itot, const int jtot)
+        const int itot, const int jtot, const int ktot)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -256,7 +265,8 @@ void ray_tracer_kernel(
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
-            completed, itot);
+            completed,
+            itot, jtot);
 
     while ((*n_photons_in < photons_to_shoot) || photons[n].status == Photon_status::Enabled)
     {
@@ -304,8 +314,8 @@ void ray_tracer_kernel(
             photons[n].position.y += y_size;
 
         // Handle the surface and top exits.
-        const int i = photons[n].position.x / dx_grid;
-        const int j = photons[n].position.y / dy_grid;
+        const int i = float_to_int(photons[n].position.x, dx_grid, itot);
+        const int j = float_to_int(photons[n].position.y, dy_grid, jtot);
         const int ij = i + j*itot;
 
         if (surface_exit)
@@ -349,7 +359,8 @@ void ray_tracer_kernel(
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
-                        photon_generation_completed, itot);
+                        photon_generation_completed,
+                        itot, jtot);
             }
         }
         else if (toa_exit)
@@ -366,12 +377,13 @@ void ray_tracer_kernel(
                     x_size, y_size, z_size,
                     dx_grid, dy_grid, dz_grid,
                     dir_x, dir_y, dir_z,
-                    photon_generation_completed, itot);
+                    photon_generation_completed,
+                    itot, jtot);
         }
         else
         {
             // Calculate the 3D index.
-            const int k = photons[n].position.z / dz_grid;
+            const int k = float_to_int(photons[n].position.z, dz_grid, ktot);
             const int ijk = i + j*itot + k*itot*jtot;
 
             // Handle the action.
@@ -432,7 +444,8 @@ void ray_tracer_kernel(
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
-                        photon_generation_completed, itot);
+                        photon_generation_completed,
+                        itot, jtot);
             }
         }
     }
@@ -569,7 +582,7 @@ void run_ray_tracer(const Int n_photons)
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
-            itot, jtot);
+            itot, jtot, ktot);
 
     cuda_safe_call(cudaDeviceSynchronize());
 
