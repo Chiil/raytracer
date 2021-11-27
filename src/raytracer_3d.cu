@@ -188,7 +188,6 @@ inline void reset_photon(
         const int i = photon.position.x / dx_grid;
         const int j = photon.position.y / dy_grid;
         const int ij = i + j*itot;
-
         atomicAdd(&toa_down_count[ij], 1);
     }
 }
@@ -626,9 +625,8 @@ int main(int argc, char* argv[])
         std::cout << "Add the multiple of 100,000 photons as an argument!" << std::endl;
         return 1;
     }
-
-    const Int n_photons = std::stoi(argv[1]) * 100000;
-
+    const Int input =  std::stoi(argv[1]);
+    const Int n_photons = 100000 * input;
     run_ray_tracer(n_photons);
 
     return 0;
