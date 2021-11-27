@@ -175,9 +175,11 @@ inline void reset_photon(
     photon.position.x = x_size * random_number_x;
     photon.position.y = y_size * random_number_y;
     photon.position.z = z_size;
+
     photon.direction.x = dir_x;
     photon.direction.y = dir_y;
     photon.direction.z = dir_z;
+
     photon.kind = Photon_kind::Direct;
     photon.status = generation_completed ? Photon_status::Disabled : Photon_status::Enabled;
 
@@ -188,6 +190,7 @@ inline void reset_photon(
         const int i = photon.position.x / dx_grid;
         const int j = photon.position.y / dy_grid;
         const int ij = i + j*itot;
+
         atomicAdd(&toa_down_count[ij], 1);
     }
 }
@@ -210,14 +213,14 @@ struct Random_number_generator
 template<>
 __device__ double Random_number_generator<double>::operator()()
 {
-    return curand_uniform_double(&state);
+    return 1. - curand_uniform_double(&state);
 }
 
 
 template<>
 __device__ float Random_number_generator<float>::operator()()
 {
-    return curand_uniform(&state);
+    return 1.f - curand_uniform(&state);
 }
 
 
@@ -303,10 +306,7 @@ void ray_tracer_kernel(
         // Handle the surface and top exits.
         const int i = photons[n].position.x / dx_grid;
         const int j = photons[n].position.y / dy_grid;
-        const int k = photons[n].position.z / dz_grid;
-
         const int ij = i + j*itot;
-        const int ijk = i + j*itot + k*itot*jtot;
 
         if (surface_exit)
         {
@@ -370,6 +370,10 @@ void ray_tracer_kernel(
         }
         else
         {
+            // Calculate the 3D index.
+            const int k = photons[n].position.z / dz_grid;
+            const int ijk = i + j*itot + k*itot*jtot;
+
             // Handle the action.
             const Float random_number = rng();
 
