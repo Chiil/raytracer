@@ -223,29 +223,6 @@ __device__ float Random_number_generator<float>::operator()()
 
 
 __global__
-void ray_tracer_init_kernel(
-        Photon* __restrict__ photons, Int* n_photons_in, Int* __restrict__ toa_down_count,
-        const Float x_size, const Float y_size, const Float z_size,
-        const Float dx_grid, const Float dy_grid, const Float dz_grid,
-        const Float dir_x, const Float dir_y, const Float dir_z, 
-        const int itot)
-{
-    const int n = blockDim.x * blockIdx.x + threadIdx.x;
-
-    Random_number_generator<Float> rng(n);
-
-    const bool completed = false;
-
-    reset_photon(
-            photons[n], n_photons_in, toa_down_count,
-            rng(), rng(),
-            x_size, y_size, z_size,
-            dx_grid, dy_grid, dz_grid,
-            dir_x, dir_y, dir_z,
-            completed, itot);
-}
-
-__global__
 void ray_tracer_kernel(
         const int photons_to_shoot,
         Photon* __restrict__ photons,
@@ -266,13 +243,23 @@ void ray_tracer_kernel(
         const int itot, const int jtot)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
-    const int n_rnd = n + *n_photons_in;
 
-    Random_number_generator<Float> rng(n_rnd);
+    Random_number_generator<Float> rng(n);
+
+    // Set up the initial photons.
+    const bool completed = false;
+    reset_photon(
+            photons[n], n_photons_in, toa_down_count,
+            rng(), rng(),
+            x_size, y_size, z_size,
+            dx_grid, dy_grid, dz_grid,
+            dir_x, dir_y, dir_z,
+            completed, itot);
 
     while ((*n_photons_in < photons_to_shoot) || photons[n].status == Photon_status::Enabled)
     {
         const bool photon_generation_completed = *n_photons_in >= photons_to_shoot;
+
         const Float dn = sample_tau(rng()) / k_ext_null;
         Float dx = photons[n].direction.x * dn;
         Float dy = photons[n].direction.y * dn;
@@ -448,6 +435,7 @@ void ray_tracer_kernel(
     }
 }
 
+
 void run_ray_tracer(const Int n_photons)
 {
     //// DEFINE INPUT ////
@@ -567,13 +555,6 @@ void run_ray_tracer(const Int n_photons)
     
     auto start = std::chrono::high_resolution_clock::now();
 
-    ray_tracer_init_kernel<<<grid, block>>>(
-            photons, n_photons_in_gpu, toa_down_count_gpu,
-            x_size, y_size, z_size,
-            dx_grid, dy_grid, dz_grid,
-            dir_x, dir_y, dir_z,
-            itot);
-    
     ray_tracer_kernel<<<grid, block>>>(
             n_photons, photons,
             n_photons_in_gpu, n_photons_out_gpu,
