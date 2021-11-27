@@ -625,8 +625,8 @@ int main(int argc, char* argv[])
         std::cout << "Add the multiple of 100,000 photons as an argument!" << std::endl;
         return 1;
     }
-    const Int input =  std::stoi(argv[1]);
-    const Int n_photons = 100000 * input;
+
+    const Int n_photons = 100000 * static_cast<Int>(std::stoi(argv[1]));
     run_ray_tracer(n_photons);
 
     return 0;
