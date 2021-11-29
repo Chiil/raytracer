@@ -87,6 +87,13 @@ struct Photon
 };
 
 
+struct K_ext
+{
+    Float gas;
+    Float cloud;
+};
+
+
 __device__
 Float pow2(const Float d) { return d*d; }
 
@@ -245,7 +252,7 @@ void ray_tracer_kernel(
         Int* __restrict__ surface_up_count,
         Int* __restrict__ atmos_direct_count,
         Int* __restrict__ atmos_diffuse_count,
-        const Float* __restrict__ k_ext, const Float* __restrict__ ssa, const Float* __restrict__ asy,
+        const K_ext* __restrict__ k_ext, const Float* __restrict__ ssa, const Float* __restrict__ asy,
         const Float k_ext_null, const Float k_ext_gas,
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
@@ -390,13 +397,13 @@ void ray_tracer_kernel(
             const Float random_number = rng();
 
             // Null collision.
-            if (random_number >= (k_ext[ijk] / k_ext_null))
+            if (random_number >= ((k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null))
             {
             }
             // Scattering.
-            else if (random_number <= ssa[ijk] * k_ext[ijk] / k_ext_null)
+            else if (random_number <= ssa[ijk] * (k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null)
             {
-                const bool cloud_scatter = rng() < (k_ext[ijk] - k_ext_gas) / k_ext[ijk];
+                const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
                 const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
                 const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
@@ -487,12 +494,12 @@ void run_ray_tracer(const Int n_photons)
     const Float asy_cloud = 0.85;
 
     // Create the spatial fields.
-    std::vector<Float> k_ext(itot*jtot*ktot);
+    std::vector<K_ext> k_ext(itot*jtot*ktot);
     std::vector<Float> ssa(itot*jtot*ktot);
     std::vector<Float> asy(itot*jtot*ktot);
 
     // First add the gases over the entire domain.
-    std::fill(k_ext.begin(), k_ext.end(), k_ext_gas);
+    std::fill(k_ext.begin(), k_ext.end(), K_ext{k_ext_gas, Float(0.)});
     std::fill(ssa.begin(), ssa.end(), ssa_gas);
 
     // Add a block cloud.
@@ -505,7 +512,7 @@ void run_ray_tracer(const Int n_photons)
                    && (k+0.5)*dz_grid > 1000. && (k+0.5)*dz_grid < 1500.)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
-                    k_ext[ijk] = k_ext_gas + k_ext_cloud;
+                    k_ext[ijk].cloud = k_ext_cloud;
                     ssa[ijk] = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
                              / (k_ext_gas + k_ext_cloud);
                     asy[ijk] = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
@@ -514,7 +521,7 @@ void run_ray_tracer(const Int n_photons)
             }
 
     // Set the step size for the transport solver to the maximum extinction coefficient.
-    const Float k_ext_null = *std::max_element(k_ext.begin(), k_ext.end());
+    const Float k_ext_null = 0.0051;// *std::max_element(k_ext.begin(), k_ext.end());
 
 
     //// PREPARE OUTPUT ARRAYS ////
@@ -529,7 +536,7 @@ void run_ray_tracer(const Int n_photons)
 
     //// COPY THE DATA TO THE GPU.
     // Input array.
-    Float* k_ext_gpu = allocate_gpu<Float>(itot*jtot*ktot);
+    K_ext* k_ext_gpu = allocate_gpu<K_ext>(itot*jtot*ktot);
     Float* ssa_gpu = allocate_gpu<Float>(itot*jtot*ktot);
     Float* asy_gpu = allocate_gpu<Float>(itot*jtot*ktot);
 
