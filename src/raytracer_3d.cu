@@ -87,10 +87,16 @@ struct Photon
 };
 
 
-struct K_ext
+struct Optical_props_k_ext
 {
     Float gas;
     Float cloud;
+};
+
+struct Optical_props_scat
+{
+    Float ssa;
+    Float asy;
 };
 
 
@@ -252,7 +258,7 @@ void ray_tracer_kernel(
         Int* __restrict__ surface_up_count,
         Int* __restrict__ atmos_direct_count,
         Int* __restrict__ atmos_diffuse_count,
-        const K_ext* __restrict__ k_ext, const Float* __restrict__ ssa, const Float* __restrict__ asy,
+        const Optical_props_k_ext* __restrict__ k_ext, const Optical_props_scat* __restrict__ ssa_asy,
         const Float k_ext_null, const Float k_ext_gas,
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
@@ -401,10 +407,10 @@ void ray_tracer_kernel(
             {
             }
             // Scattering.
-            else if (random_number <= ssa[ijk] * (k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null)
+            else if (random_number <= ssa_asy[ijk].ssa * (k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null)
             {
                 const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
-                const Float cos_scat = cloud_scatter ? henyey(asy[ijk], rng()) : rayleigh(rng());
+                const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
                 const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
                 Vector t1{Float(0.), Float(0.), Float(0.)};
@@ -494,13 +500,12 @@ void run_ray_tracer(const Int n_photons)
     const Float asy_cloud = 0.85;
 
     // Create the spatial fields.
-    std::vector<K_ext> k_ext(itot*jtot*ktot);
-    std::vector<Float> ssa(itot*jtot*ktot);
-    std::vector<Float> asy(itot*jtot*ktot);
+    std::vector<Optical_props_k_ext> k_ext(itot*jtot*ktot);
+    std::vector<Optical_props_scat> ssa_asy(itot*jtot*ktot);
 
     // First add the gases over the entire domain.
-    std::fill(k_ext.begin(), k_ext.end(), K_ext{k_ext_gas, Float(0.)});
-    std::fill(ssa.begin(), ssa.end(), ssa_gas);
+    std::fill(k_ext.begin(), k_ext.end(), Optical_props_k_ext{k_ext_gas, Float(0.)});
+    std::fill(ssa_asy.begin(), ssa_asy.end(), Optical_props_scat{ssa_gas, asy_gas});
 
     // Add a block cloud.
     for (int k=0; k<ktot; ++k)
@@ -513,15 +518,15 @@ void run_ray_tracer(const Int n_photons)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
                     k_ext[ijk].cloud = k_ext_cloud;
-                    ssa[ijk] = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
+                    ssa_asy[ijk].ssa = (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud)
                              / (k_ext_gas + k_ext_cloud);
-                    asy[ijk] = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
+                    ssa_asy[ijk].asy = (asy_gas*ssa_gas*k_ext_gas + asy_cloud*ssa_cloud*k_ext_cloud)
                              / (ssa_gas*k_ext_gas + ssa_cloud*k_ext_cloud);
                 }
             }
 
     // Set the step size for the transport solver to the maximum extinction coefficient.
-    const Float k_ext_null = 0.0051;// *std::max_element(k_ext.begin(), k_ext.end());
+    const Float k_ext_null = k_ext_gas + k_ext_cloud;
 
 
     //// PREPARE OUTPUT ARRAYS ////
@@ -536,13 +541,11 @@ void run_ray_tracer(const Int n_photons)
 
     //// COPY THE DATA TO THE GPU.
     // Input array.
-    K_ext* k_ext_gpu = allocate_gpu<K_ext>(itot*jtot*ktot);
-    Float* ssa_gpu = allocate_gpu<Float>(itot*jtot*ktot);
-    Float* asy_gpu = allocate_gpu<Float>(itot*jtot*ktot);
+    Optical_props_k_ext* k_ext_gpu = allocate_gpu<Optical_props_k_ext>(itot*jtot*ktot);
+    Optical_props_scat* ssa_asy_gpu = allocate_gpu<Optical_props_scat>(itot*jtot*ktot);
 
     copy_to_gpu(k_ext_gpu, k_ext.data(), itot*jtot*ktot);
-    copy_to_gpu(ssa_gpu, ssa.data(), itot*jtot*ktot);
-    copy_to_gpu(asy_gpu, asy.data(), itot*jtot*ktot);
+    copy_to_gpu(ssa_asy_gpu, ssa_asy.data(), itot*jtot*ktot);
 
     // Output arrays. Copy them in order to enable restarts later.
     Int* surface_down_direct_count_gpu = allocate_gpu<Int>(itot*jtot);
@@ -584,7 +587,7 @@ void run_ray_tracer(const Int n_photons)
             toa_down_count_gpu, toa_up_count_gpu,
             surface_down_direct_count_gpu, surface_down_diffuse_count_gpu, surface_up_count_gpu,
             atmos_direct_count_gpu, atmos_diffuse_count_gpu,
-            k_ext_gpu, ssa_gpu, asy_gpu,
+            k_ext_gpu, ssa_asy_gpu,
             k_ext_null, k_ext_gas, surface_albedo,
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
