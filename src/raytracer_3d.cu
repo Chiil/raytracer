@@ -87,13 +87,13 @@ struct Photon
 };
 
 
-struct Optical_props_k_ext
+struct Optics_ext
 {
     Float gas;
     Float cloud;
 };
 
-struct Optical_props_scat
+struct Optics_scat
 {
     Float ssa;
     Float asy;
@@ -258,7 +258,7 @@ void ray_tracer_kernel(
         Int* __restrict__ surface_up_count,
         Int* __restrict__ atmos_direct_count,
         Int* __restrict__ atmos_diffuse_count,
-        const Optical_props_k_ext* __restrict__ k_ext, const Optical_props_scat* __restrict__ ssa_asy,
+        const Optics_ext* __restrict__ k_ext, const Optics_scat* __restrict__ ssa_asy,
         const Float k_ext_null, const Float k_ext_gas,
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
@@ -500,12 +500,12 @@ void run_ray_tracer(const Int n_photons)
     const Float asy_cloud = 0.85;
 
     // Create the spatial fields.
-    std::vector<Optical_props_k_ext> k_ext(itot*jtot*ktot);
-    std::vector<Optical_props_scat> ssa_asy(itot*jtot*ktot);
+    std::vector<Optics_ext> k_ext(itot*jtot*ktot);
+    std::vector<Optics_scat> ssa_asy(itot*jtot*ktot);
 
     // First add the gases over the entire domain.
-    std::fill(k_ext.begin(), k_ext.end(), Optical_props_k_ext{k_ext_gas, Float(0.)});
-    std::fill(ssa_asy.begin(), ssa_asy.end(), Optical_props_scat{ssa_gas, asy_gas});
+    std::fill(k_ext.begin(), k_ext.end(), Optics_ext{k_ext_gas, Float(0.)});
+    std::fill(ssa_asy.begin(), ssa_asy.end(), Optics_scat{ssa_gas, asy_gas});
 
     // Add a block cloud.
     for (int k=0; k<ktot; ++k)
@@ -541,8 +541,8 @@ void run_ray_tracer(const Int n_photons)
 
     //// COPY THE DATA TO THE GPU.
     // Input array.
-    Optical_props_k_ext* k_ext_gpu = allocate_gpu<Optical_props_k_ext>(itot*jtot*ktot);
-    Optical_props_scat* ssa_asy_gpu = allocate_gpu<Optical_props_scat>(itot*jtot*ktot);
+    Optics_ext* k_ext_gpu = allocate_gpu<Optics_ext>(itot*jtot*ktot);
+    Optics_scat* ssa_asy_gpu = allocate_gpu<Optics_scat>(itot*jtot*ktot);
 
     copy_to_gpu(k_ext_gpu, k_ext.data(), itot*jtot*ktot);
     copy_to_gpu(ssa_asy_gpu, ssa_asy.data(), itot*jtot*ktot);
