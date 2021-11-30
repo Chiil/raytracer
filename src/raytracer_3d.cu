@@ -258,8 +258,8 @@ struct Quasi_random_number_generator_2d
         curand_init(direction_vectors[1], offset, &state_y);
     }
 
-    __device__ T x() { 1.f - curand_uniform(&state_x); }
-    __device__ T y() { 1.f - curand_uniform(&state_y); }
+    __device__ T x() { return 1.f - curand_uniform(&state_x); }
+    __device__ T y() { return 1.f - curand_uniform(&state_y); }
 
     // curandStateScrambledSobol32_t state_x;
     // curandStateScrambledSobol32_t state_y;
