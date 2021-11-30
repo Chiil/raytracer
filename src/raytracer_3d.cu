@@ -250,21 +250,17 @@ template<typename T>
 struct Quasi_random_number_generator_2d
 {
     __device__ Quasi_random_number_generator_2d(
-            curandDirectionVectors32_t* direction_vectors, unsigned int offset)
+            curandDirectionVectors32_t* vectors, unsigned int* constants, unsigned int offset)
     {
-        // curand_init(direction_vectors, scramble_c, offset, &state_x);
-        // curand_init(direction_vectors, scramble_c, offset, &state_y);
-        curand_init(direction_vectors[0], offset, &state_x);
-        curand_init(direction_vectors[1], offset, &state_y);
+        curand_init(vectors[0], constants[0], offset, &state_x);
+        curand_init(vectors[1], constants[1], offset, &state_y);
     }
 
     __device__ T x() { return 1.f - curand_uniform(&state_x); }
     __device__ T y() { return 1.f - curand_uniform(&state_y); }
 
-    // curandStateScrambledSobol32_t state_x;
-    // curandStateScrambledSobol32_t state_y;
-    curandStateSobol32_t state_x;
-    curandStateSobol32_t state_y;
+    curandStateScrambledSobol32_t state_x;
+    curandStateScrambledSobol32_t state_y;
 };
 
 
@@ -287,12 +283,12 @@ void ray_tracer_kernel(
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot, const int jtot, const int ktot,
-        curandDirectionVectors32_t* qrng_vectors)
+        curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
 
     Random_number_generator<Float> rng(n);
-    Quasi_random_number_generator_2d<Float> qrng(qrng_vectors, n);
+    Quasi_random_number_generator_2d<Float> qrng(qrng_vectors, qrng_constants, n);
 
     // Set up the initial photons.
     const bool completed = false;
@@ -604,11 +600,14 @@ void run_ray_tracer(const Int n_photons)
     curandDirectionVectors32_t* qrng_vectors;
     curandGetDirectionVectors32(
                 &qrng_vectors,
-                // CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
-                CURAND_DIRECTION_VECTORS_32_JOEKUO6);
+                CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
+    unsigned int* qrng_constants;
+    curandGetScrambleConstants32(&qrng_constants);
 
     curandDirectionVectors32_t* qrng_vectors_gpu = allocate_gpu<curandDirectionVectors32_t>(2);
     copy_to_gpu(qrng_vectors_gpu, qrng_vectors, 2);
+    unsigned int* qrng_constants_gpu = allocate_gpu<unsigned int>(2);
+    copy_to_gpu(qrng_constants_gpu, qrng_constants, 2);
 
     dim3 grid{grid_size}, block{block_size};
     
@@ -626,7 +625,7 @@ void run_ray_tracer(const Int n_photons)
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
             itot, jtot, ktot,
-            qrng_vectors_gpu);
+            qrng_vectors_gpu, qrng_constants_gpu);
 
     cuda_safe_call(cudaDeviceSynchronize());
 
