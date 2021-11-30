@@ -604,7 +604,8 @@ void run_ray_tracer(const Int n_photons)
     curandDirectionVectors32_t* qrng_vectors;
     curandGetDirectionVectors32(
                 &qrng_vectors,
-                CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
+                // CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
+                CURAND_DIRECTION_VECTORS_32_JOEKUO6);
 
     curandDirectionVectors32_t* qrng_vectors_gpu = allocate_gpu<curandDirectionVectors32_t>(2);
     copy_to_gpu(qrng_vectors_gpu, qrng_vectors, 2);
@@ -625,7 +626,7 @@ void run_ray_tracer(const Int n_photons)
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
             itot, jtot, ktot,
-            qrng_vectors);
+            qrng_vectors_gpu);
 
     cuda_safe_call(cudaDeviceSynchronize());
 
