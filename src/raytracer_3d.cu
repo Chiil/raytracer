@@ -246,6 +246,28 @@ __device__ float Random_number_generator<float>::operator()()
 }
 
 
+template<typename T>
+struct Quasi_random_number_generator_2d
+{
+    __device__ Quasi_random_number_generator_2d(
+            curandDirectionVectors32_t* direction_vectors, unsigned int offset)
+    {
+        // curand_init(direction_vectors, scramble_c, offset, &state_x);
+        // curand_init(direction_vectors, scramble_c, offset, &state_y);
+        curand_init(direction_vectors[0], offset, &state_x);
+        curand_init(direction_vectors[1], offset, &state_y);
+    }
+
+    __device__ T x() { 1.f - curand_uniform(&state_x); }
+    __device__ T y() { 1.f - curand_uniform(&state_y); }
+
+    // curandStateScrambledSobol32_t state_x;
+    // curandStateScrambledSobol32_t state_y;
+    curandStateSobol32_t state_x;
+    curandStateSobol32_t state_y;
+};
+
+
 __global__
 void ray_tracer_kernel(
         const Int photons_to_shoot,
@@ -264,17 +286,19 @@ void ray_tracer_kernel(
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const Float dir_z, 
-        const int itot, const int jtot, const int ktot)
+        const int itot, const int jtot, const int ktot,
+        curandDirectionVectors32_t* qrng_vectors)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
 
     Random_number_generator<Float> rng(n);
+    Quasi_random_number_generator_2d<Float> qrng(qrng_vectors, n);
 
     // Set up the initial photons.
     const bool completed = false;
     reset_photon(
             photons[n], n_photons_in, toa_down_count,
-            rng(), rng(),
+            qrng.x(), qrng.y(),
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
@@ -368,7 +392,7 @@ void ray_tracer_kernel(
             {
                 reset_photon(
                         photons[n], n_photons_in, toa_down_count,
-                        rng(), rng(),
+                        qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
@@ -386,7 +410,7 @@ void ray_tracer_kernel(
 
             reset_photon(
                     photons[n], n_photons_in, toa_down_count,
-                    rng(), rng(),
+                    qrng.x(), qrng.y(),
                     x_size, y_size, z_size,
                     dx_grid, dy_grid, dz_grid,
                     dir_x, dir_y, dir_z,
@@ -453,7 +477,7 @@ void ray_tracer_kernel(
 
                 reset_photon(
                         photons[n], n_photons_in, toa_down_count,
-                        rng(), rng(),
+                        qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
@@ -577,6 +601,14 @@ void run_ray_tracer(const Int n_photons)
     copy_to_gpu(n_photons_in_gpu, &n_photons_in, 1);
     copy_to_gpu(n_photons_out_gpu, &n_photons_out, 1);
 
+    curandDirectionVectors32_t* qrng_vectors;
+    curandGetDirectionVectors32(
+                &qrng_vectors,
+                CURAND_SCRAMBLED_DIRECTION_VECTORS_32_JOEKUO6);
+
+    curandDirectionVectors32_t* qrng_vectors_gpu = allocate_gpu<curandDirectionVectors32_t>(2);
+    copy_to_gpu(qrng_vectors_gpu, qrng_vectors, 2);
+
     dim3 grid{grid_size}, block{block_size};
     
     auto start = std::chrono::high_resolution_clock::now();
@@ -592,7 +624,8 @@ void run_ray_tracer(const Int n_photons)
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
-            itot, jtot, ktot);
+            itot, jtot, ktot,
+            qrng_vectors);
 
     cuda_safe_call(cudaDeviceSynchronize());
 
