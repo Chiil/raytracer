@@ -187,15 +187,18 @@ inline int float_to_int(const float s_size, const float ds, const int ntot_max)
 __device__
 inline void reset_photon(
         Photon& photon, Int* __restrict__ const n_photons_in, Int* __restrict__ const toa_down_count,
-        const Float random_number_x, const Float random_number_y,
+        const unsigned int random_number_x, const unsigned int random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const float dir_z,
         const bool generation_completed,
         const int itot, const int jtot)
 {
-    photon.position.x = x_size * random_number_x;
-    photon.position.y = y_size * random_number_y;
+    const int i = random_number_x / static_cast<unsigned int>((1ULL << 32) / itot);
+    const int j = random_number_y / static_cast<unsigned int>((1ULL << 32) / jtot);
+
+    photon.position.x = x_size * random_number_x / (1ULL << 32);
+    photon.position.y = y_size * random_number_y / (1ULL << 32);
     photon.position.z = z_size;
 
     photon.direction.x = dir_x;
@@ -209,10 +212,7 @@ inline void reset_photon(
     {
         atomicAdd(n_photons_in, 1);
 
-        const int i = float_to_int(photon.position.x, dx_grid, itot);
-        const int j = float_to_int(photon.position.y, dy_grid, jtot);
         const int ij = i + j*itot;
-
         atomicAdd(&toa_down_count[ij], 1);
     }
 }
@@ -246,7 +246,6 @@ __device__ float Random_number_generator<float>::operator()()
 }
 
 
-template<typename T>
 struct Quasi_random_number_generator_2d
 {
     __device__ Quasi_random_number_generator_2d(
@@ -256,8 +255,8 @@ struct Quasi_random_number_generator_2d
         curand_init(vectors[1], constants[1], offset, &state_y);
     }
 
-    __device__ T x() { return 1.f - curand_uniform(&state_x); }
-    __device__ T y() { return 1.f - curand_uniform(&state_y); }
+    __device__ unsigned int x() { return curand(&state_x); }
+    __device__ unsigned int y() { return curand(&state_y); }
 
     curandStateScrambledSobol32_t state_x;
     curandStateScrambledSobol32_t state_y;
@@ -288,7 +287,7 @@ void ray_tracer_kernel(
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
 
     Random_number_generator<Float> rng(n);
-    Quasi_random_number_generator_2d<Float> qrng(qrng_vectors, qrng_constants, n);
+    Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n);
 
     // Set up the initial photons.
     const bool completed = false;
