@@ -62,15 +62,23 @@ atmos = atmos / norm
 # Plot the data.
 plt.figure()
 plt.pcolormesh(x, z, atmos[:, j_plot, :], shading='nearest',
-        cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
+        cmap=plt.cm.cividis, vmin=atmos.min(), vmax=atmos.max())
 plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
 plt.title('atmos')
 
 plt.figure()
+plt.pcolormesh(x, y, toa_down, shading='nearest',
+        cmap=plt.cm.cividis, vmin=toa_down.min(), vmax=toa_down.max())
+plt.colorbar()
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('toa_down')
+
+plt.figure()
 plt.pcolormesh(x, y, surface_down, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
+        cmap=plt.cm.cividis, vmin=surface_down.min(), vmax=surface_down.max())
 plt.colorbar()
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,
@@ -82,7 +90,7 @@ plt.title('surface_down')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_direct, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down_direct.min(), vmax=surface_down_direct.max())
+        cmap=plt.cm.cividis, vmin=surface_down_direct.min(), vmax=surface_down_direct.max())
 plt.colorbar()
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,
@@ -94,7 +102,7 @@ plt.title('surface_down_direct')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_diffuse, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down_diffuse.min(), vmax=surface_down_diffuse.max())
+        cmap=plt.cm.cividis, vmin=surface_down_diffuse.min(), vmax=surface_down_diffuse.max())
 plt.colorbar()
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,
@@ -103,44 +111,6 @@ plt.gca().add_patch(rect)
 plt.xlabel('x (m)')
 plt.ylabel('y (m)')
 plt.title('surface_down_diffuse')
-
-"""
-plt.figure()
-plt.pcolormesh(x, y, surface_up, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_up.min(), vmax=surface_up.max())
-plt.colorbar()
-rect = patches.Rectangle(
-        (4000, 2700), 1000, 1000,
-        edgecolor='k', facecolor='none', hatch='//')
-plt.gca().add_patch(rect)
-plt.xlabel('x (m)')
-plt.ylabel('y (m)')
-plt.title('surface_up')
-
-plt.figure()
-plt.pcolormesh(x, y, toa_down, shading='nearest',
-        cmap=plt.cm.viridis, vmin=toa_down.min(), vmax=toa_down.max())
-plt.colorbar()
-rect = patches.Rectangle(
-        (4000, 2700), 1000, 1000,
-        edgecolor='k', facecolor='none', hatch='//')
-plt.gca().add_patch(rect)
-plt.xlabel('x (m)')
-plt.ylabel('y (m)')
-plt.title('toa_down')
-
-plt.figure()
-plt.plot(x, surface_down[j_plot, :], 'C0-', label='surf_dn')
-plt.plot(x, surface_down_direct[j_plot, :], 'C0--', label='surf_dn_dir')
-plt.plot(x, surface_down_diffuse[j_plot, :], 'C0:', label='surf_dn_dif')
-plt.plot(x, surface_up[j_plot, :], 'C1-', label='surf_up')
-plt.plot(x, toa_down[j_plot, :], 'C2-', label='toa_dn')
-plt.plot(x, toa_up[j_plot, :], 'C3-', label='toa_up')
-plt.legend(loc=0, ncol=3)
-plt.xlabel('x (m)')
-plt.ylabel('normalized irradiance (-)')
-plt.ylim(0, 1.3)
-"""
 
 
 # Filter the data
@@ -165,7 +135,7 @@ atmos_filtered = smooth_data_3d(atmos)
 # Plot the filtered data.
 plt.figure()
 plt.pcolormesh(x, z, atmos_filtered[:, j_plot, :], shading='nearest',
-        cmap=plt.cm.viridis, vmin=atmos.min(), vmax=atmos.max())
+        cmap=plt.cm.cividis, vmin=atmos.min(), vmax=atmos.max())
 plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
@@ -179,7 +149,7 @@ plt.ylabel('atmos_filtered (-)')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_filtered, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
+        cmap=plt.cm.cividis, vmin=surface_down.min(), vmax=surface_down.max())
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,
         edgecolor='k', facecolor='none', hatch='//')
@@ -191,7 +161,7 @@ plt.title('surface_down_filtered')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_direct_filtered, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down_direct.min(), vmax=surface_down_direct.max())
+        cmap=plt.cm.cividis, vmin=surface_down_direct.min(), vmax=surface_down_direct.max())
 plt.colorbar()
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,
@@ -203,7 +173,7 @@ plt.title('surface_down_direct_filtered')
 
 plt.figure()
 plt.pcolormesh(x, y, surface_down_diffuse_filtered, shading='nearest',
-        cmap=plt.cm.viridis, vmin=surface_down_diffuse.min(), vmax=surface_down_diffuse.max())
+        cmap=plt.cm.cividis, vmin=surface_down_diffuse.min(), vmax=surface_down_diffuse.max())
 plt.colorbar()
 rect = patches.Rectangle(
         (4000, 2700), 1000, 1000,

@@ -211,7 +211,6 @@ inline void reset_photon(
         photon.direction.z = dir_z;
 
         photon.kind = Photon_kind::Direct;
-        //++photons_shot;
         atomicAdd(n_photons_in, 1);
 
         const int ij = i + j*itot;
@@ -264,6 +263,7 @@ struct Quasi_random_number_generator_2d
     curandStateScrambledSobol32_t state_y;
 };
 
+
 __device__
 inline void write_photon_out(
     Int* field_out, Int& photons_shot, 
@@ -274,6 +274,7 @@ inline void write_photon_out(
     atomicAdd(n_photons_out, inc);
     atomicAdd(field_out, 1);
 }
+
 
 __global__
 void ray_tracer_kernel(
@@ -297,6 +298,7 @@ void ray_tracer_kernel(
         curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
+
     Random_number_generator<Float> rng(n);
     Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n * photons_to_shoot);
 
@@ -472,9 +474,9 @@ void ray_tracer_kernel(
                 {
 
                     if (photons[n].kind == Photon_kind::Direct)
-                        write_photon_out(&atmos_direct_count[ij], photons_shot, n_photons_out, 1);
+                        write_photon_out(&atmos_direct_count[ijk], photons_shot, n_photons_out, 1);
                     else
-                        write_photon_out(&atmos_diffuse_count[ij], photons_shot, n_photons_out, 1);
+                        write_photon_out(&atmos_diffuse_count[ijk], photons_shot, n_photons_out, 1);
                 }
 
                 reset_photon(
@@ -516,9 +518,9 @@ void run_ray_tracer(const Int n_photons)
     const Float zenith_angle = 50.*(M_PI/180.);
     const Float azimuth_angle = 20.*(M_PI/180.);
     
-    const Float dir_x = -sin(zenith_angle) * cos(azimuth_angle);
-    const Float dir_y = -sin(zenith_angle) * sin(azimuth_angle);
-    const Float dir_z = -cos(zenith_angle);
+    const Float dir_x = -std::sin(zenith_angle) * std::cos(azimuth_angle);
+    const Float dir_y = -std::sin(zenith_angle) * std::sin(azimuth_angle);
+    const Float dir_z = -std::cos(zenith_angle);
 
     // Input fields.
     const Float k_ext_gas = 1.e-4; // 3.e-4;
@@ -696,10 +698,11 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    const Int n_photons = pow(Int(2), static_cast<Int>(std::stoi(argv[1])));
+    const Int n_photons = std::pow(Int(2), static_cast<Int>(std::stoi(argv[1])));
     
     if (n_photons < grid_size * block_size)
-        std::cout << "Sorry, the number of photons must be larger than " << grid_size * block_size << " (n >= " << log2(grid_size*block_size) <<" ) to guarantee one photon per thread" << std::endl;
+        std::cout << "Sorry, the number of photons must be larger than " << grid_size * block_size
+            << " (n >= " << std::log2(grid_size*block_size) << ") to guarantee one photon per thread" << std::endl;
     
     run_ray_tracer(n_photons);
 
