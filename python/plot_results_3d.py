@@ -25,14 +25,14 @@ x = np.arange(0.5*dx, itot*dx, dx)
 y = np.arange(0.5*dy, jtot*dy, dy)
 z = np.arange(0.5*dz, ktot*dz, dz)
 
-surface_down_direct = np.fromfile('surface_down_direct.bin', dtype=np.uint64).reshape(jtot, itot)
-surface_down_diffuse = np.fromfile('surface_down_diffuse.bin', dtype=np.uint64).reshape(jtot, itot)
+surface_down_direct = np.fromfile('../build/surface_down_direct.bin', dtype=np.uint64).reshape(jtot, itot)
+surface_down_diffuse = np.fromfile('../build/surface_down_diffuse.bin', dtype=np.uint64).reshape(jtot, itot)
 surface_down = surface_down_direct + surface_down_diffuse
-surface_up = np.fromfile('surface_up.bin', dtype=np.uint64).reshape(jtot, itot)
-toa_up = np.fromfile('toa_up.bin', dtype=np.uint64).reshape(jtot, itot)
-toa_down = np.fromfile('toa_down.bin', dtype=np.uint64).reshape(jtot, itot)
-atmos_direct = np.fromfile('atmos_direct.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
-atmos_diffuse = np.fromfile('atmos_diffuse.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
+surface_up = np.fromfile('../build/surface_up.bin', dtype=np.uint64).reshape(jtot, itot)
+toa_up = np.fromfile('../build/toa_up.bin', dtype=np.uint64).reshape(jtot, itot)
+toa_down = np.fromfile('../build/toa_down.bin', dtype=np.uint64).reshape(jtot, itot)
+atmos_direct = np.fromfile('../build/atmos_direct.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
+atmos_diffuse = np.fromfile('../build/atmos_diffuse.bin', dtype=np.uint64).reshape((ktot, jtot, itot))
 
 atmos = atmos_direct + atmos_diffuse
 
@@ -47,9 +47,9 @@ print('in: ', balance_in)
 print('out: ', balance_out)
 print('balance: ', balance_net)
 
-
+toa_down = toa_down- 1.875
 # Normalize the data.
-norm = toa_down.mean()
+norm = toa_down.mean()# - 1.875
 surface_down_direct = surface_down_direct / norm
 surface_down_diffuse = surface_down_diffuse / norm
 surface_down = surface_down / norm
@@ -67,8 +67,20 @@ plt.colorbar()
 plt.xlabel('x (m)')
 plt.ylabel('z (m)')
 plt.title('atmos')
-
+print(toa_down)
 plt.figure()
+plt.pcolormesh(x, y, toa_down, shading='nearest',
+        cmap=plt.cm.viridis, vmin=toa_down.min(), vmax=toa_down.max())
+plt.colorbar()
+rect = patches.Rectangle(
+        (4000, 2700), 1000, 1000,
+        edgecolor='k', facecolor='none', hatch='//')
+plt.gca().add_patch(rect)
+plt.xlabel('x (m)')
+plt.ylabel('y (m)')
+plt.title('toa_down')
+plt.figure()
+
 plt.pcolormesh(x, y, surface_down, shading='nearest',
         cmap=plt.cm.viridis, vmin=surface_down.min(), vmax=surface_down.max())
 plt.colorbar()

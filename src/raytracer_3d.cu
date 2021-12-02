@@ -23,8 +23,8 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 
 using Float = float;
 const Float Float_epsilon = FLT_EPSILON;
-constexpr int block_size = 768;
-constexpr int grid_size = 40;
+constexpr int block_size = 512;
+constexpr int grid_size = 64;
 
 
 struct Vector
@@ -186,7 +186,8 @@ inline int float_to_int(const float s_size, const float ds, const int ntot_max)
 
 __device__
 inline void reset_photon(
-        Photon& photon, Int* __restrict__ const n_photons_in, Int* __restrict__ const toa_down_count,
+        Photon& photon, Int& photons_shot, Int* __restrict__ const n_photons_in,
+        Int* __restrict__ const toa_down_count,
         const unsigned int random_number_x, const unsigned int random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
@@ -194,22 +195,23 @@ inline void reset_photon(
         const bool generation_completed,
         const int itot, const int jtot)
 {
-    const int i = random_number_x / static_cast<unsigned int>((1ULL << 32) / itot);
-    const int j = random_number_y / static_cast<unsigned int>((1ULL << 32) / jtot);
-
-    photon.position.x = x_size * random_number_x / (1ULL << 32);
-    photon.position.y = y_size * random_number_y / (1ULL << 32);
-    photon.position.z = z_size;
-
-    photon.direction.x = dir_x;
-    photon.direction.y = dir_y;
-    photon.direction.z = dir_z;
-
-    photon.kind = Photon_kind::Direct;
-    photon.status = generation_completed ? Photon_status::Disabled : Photon_status::Enabled;
-
     if (!generation_completed)
     {
+        photon.status = generation_completed ? Photon_status::Disabled : Photon_status::Enabled;
+
+        const int i = random_number_x / static_cast<unsigned int>((1ULL << 32) / itot);
+        const int j = random_number_y / static_cast<unsigned int>((1ULL << 32) / jtot);
+
+        photon.position.x = x_size * random_number_x / (1ULL << 32);
+        photon.position.y = y_size * random_number_y / (1ULL << 32);
+        photon.position.z = z_size;
+
+        photon.direction.x = dir_x;
+        photon.direction.y = dir_y;
+        photon.direction.z = dir_z;
+
+        photon.kind = Photon_kind::Direct;
+        //++photons_shot;
         atomicAdd(n_photons_in, 1);
 
         const int ij = i + j*itot;
@@ -262,6 +264,16 @@ struct Quasi_random_number_generator_2d
     curandStateScrambledSobol32_t state_y;
 };
 
+__device__
+inline void write_photon_out(
+    Int* field_out, Int& photons_shot, 
+    Int* __restrict__ const n_photons_out,
+    const Int inc) 
+{
+    photons_shot += inc;
+    atomicAdd(n_photons_out, inc);
+    atomicAdd(field_out, 1);
+}
 
 __global__
 void ray_tracer_kernel(
@@ -285,25 +297,25 @@ void ray_tracer_kernel(
         curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
-
     Random_number_generator<Float> rng(n);
-    Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n);
+    Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n * photons_to_shoot);
 
     // Set up the initial photons.
     const bool completed = false;
+    Int photons_shot = 0;
+    
     reset_photon(
-            photons[n], n_photons_in, toa_down_count,
+            photons[n], photons_shot, n_photons_in, toa_down_count,
             qrng.x(), qrng.y(),
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
             completed,
             itot, jtot);
-
-    while ((*n_photons_in < photons_to_shoot) || photons[n].status == Photon_status::Enabled)
-    {
-        const bool photon_generation_completed = *n_photons_in >= photons_to_shoot;
-
+   
+    while (photons_shot < photons_to_shoot )
+    {        
+        const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
         const Float dn = sample_tau(rng()) / k_ext_null;
         Float dx = photons[n].direction.x * dn;
         Float dy = photons[n].direction.y * dn;
@@ -355,14 +367,12 @@ void ray_tracer_kernel(
             if (photons[n].kind == Photon_kind::Direct
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
-                atomicAdd(&surface_down_direct_count[ij], 1);
+                write_photon_out(&surface_down_direct_count[ij], photons_shot, n_photons_out, 1);
             }
             else if (photons[n].kind == Photon_kind::Diffuse
                     && photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
-                atomicAdd(&surface_down_diffuse_count[ij], 1);
+                write_photon_out(&surface_down_diffuse_count[ij], photons_shot, n_photons_out, 1);
             }
 
             // Surface scatter if smaller than albedo, otherwise absorb
@@ -371,8 +381,7 @@ void ray_tracer_kernel(
                 if (photons[n].status == Photon_status::Enabled)
                 {
                     // Adding 0xffffffffffffffffULL is equal to subtracting one.
-                    atomicAdd(n_photons_out, Atomic_reduce_const);
-                    atomicAdd(&surface_up_count[ij], 1);
+                    write_photon_out(&surface_up_count[ij], photons_shot, n_photons_out, Atomic_reduce_const);
                 }
 
                 const Float mu_surface = sqrt(rng());
@@ -386,7 +395,7 @@ void ray_tracer_kernel(
             else
             {
                 reset_photon(
-                        photons[n], n_photons_in, toa_down_count,
+                        photons[n], photons_shot, n_photons_in, toa_down_count,
                         qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
@@ -399,12 +408,11 @@ void ray_tracer_kernel(
         {
             if (photons[n].status == Photon_status::Enabled)
             {
-                atomicAdd(n_photons_out, 1);
-                atomicAdd(&toa_up_count[ij], 1);
+                write_photon_out(&toa_up_count[ij], photons_shot, n_photons_out, 1);
             }
 
             reset_photon(
-                    photons[n], n_photons_in, toa_down_count,
+                    photons[n], photons_shot, n_photons_in, toa_down_count,
                     qrng.x(), qrng.y(),
                     x_size, y_size, z_size,
                     dx_grid, dy_grid, dz_grid,
@@ -462,16 +470,15 @@ void ray_tracer_kernel(
             {
                 if (photons[n].status == Photon_status::Enabled)
                 {
-                    atomicAdd(n_photons_out, 1);
 
                     if (photons[n].kind == Photon_kind::Direct)
-                        atomicAdd(&atmos_direct_count[ijk], 1);
+                        write_photon_out(&atmos_direct_count[ij], photons_shot, n_photons_out, 1);
                     else
-                        atomicAdd(&atmos_diffuse_count[ijk], 1);
+                        write_photon_out(&atmos_diffuse_count[ij], photons_shot, n_photons_out, 1);
                 }
 
                 reset_photon(
-                        photons[n], n_photons_in, toa_down_count,
+                        photons[n], photons_shot, n_photons_in, toa_down_count,
                         qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
@@ -486,6 +493,10 @@ void ray_tracer_kernel(
 
 void run_ray_tracer(const Int n_photons)
 {
+    // Workload per thread
+    const Int photons_per_thread = n_photons / (grid_size * block_size);
+    std::cout << "Shooting " << n_photons << " photons (" << photons_per_thread << " per thread) " << std::endl;
+
     //// DEFINE INPUT ////
     // Grid properties.
     const Float dx_grid = 50.;
@@ -613,7 +624,7 @@ void run_ray_tracer(const Int n_photons)
     auto start = std::chrono::high_resolution_clock::now();
 
     ray_tracer_kernel<<<grid, block>>>(
-            n_photons, photons,
+            photons_per_thread, photons,
             n_photons_in_gpu, n_photons_out_gpu,
             toa_down_count_gpu, toa_up_count_gpu,
             surface_down_direct_count_gpu, surface_down_diffuse_count_gpu, surface_up_count_gpu,
@@ -681,11 +692,15 @@ int main(int argc, char* argv[])
 {
     if (argc != 2)
     {
-        std::cout << "Add the multiple of 100,000 photons as an argument!" << std::endl;
+        std::cout << "The number of photons is must be a power of two (2**n), please add the exponent n" << std::endl;
         return 1;
     }
 
-    const Int n_photons = 100000 * static_cast<Int>(std::stoi(argv[1]));
+    const Int n_photons = pow(Int(2), static_cast<Int>(std::stoi(argv[1])));
+    
+    if (n_photons < grid_size * block_size)
+        std::cout << "Sorry, the number of photons must be larger than " << grid_size * block_size << " (n >= " << log2(grid_size*block_size) <<" ) to guarantee one photon per thread" << std::endl;
+    
     run_ray_tracer(n_photons);
 
     return 0;
