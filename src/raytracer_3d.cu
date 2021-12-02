@@ -75,7 +75,6 @@ Vector operator+(const Vector v1, const Vector v2) { return Vector{v1.x+v2.x, v1
 
 
 enum class Photon_kind { Direct, Diffuse };
-enum class Photon_status { Enabled, Disabled };
 
 
 struct Photon
@@ -83,7 +82,6 @@ struct Photon
     Vector position;
     Vector direction;
     Photon_kind kind;
-    Photon_status status;
 };
 
 
@@ -196,8 +194,6 @@ inline void reset_photon(
 {
     if (!generation_completed)
     {
-        photon.status = generation_completed ? Photon_status::Disabled : Photon_status::Enabled;
-
         const int i = random_number_x / static_cast<unsigned int>((1ULL << 32) / itot);
         const int j = random_number_y / static_cast<unsigned int>((1ULL << 32) / jtot);
 
@@ -359,16 +355,15 @@ void ray_tracer_kernel(
 
         if (surface_exit)
         {
-            if (photons[n].kind == Photon_kind::Direct && photons[n].status == Photon_status::Enabled)
+            if (photons[n].kind == Photon_kind::Direct)
                 write_photon_out(&surface_down_direct_count[ij], photons_shot, 1);
-            else if (photons[n].kind == Photon_kind::Diffuse && photons[n].status == Photon_status::Enabled)
+            else if (photons[n].kind == Photon_kind::Diffuse)
                 write_photon_out(&surface_down_diffuse_count[ij], photons_shot, 1);
 
             // Surface scatter if smaller than albedo, otherwise absorb
             if (rng() <= surface_albedo)
             {
-                if (photons[n].status == Photon_status::Enabled)
-                    write_photon_out(&surface_up_count[ij], photons_shot, Atomic_reduce_const);
+                write_photon_out(&surface_up_count[ij], photons_shot, Atomic_reduce_const);
 
                 const Float mu_surface = sqrt(rng());
                 const Float azimuth_surface = Float(2.*M_PI)*rng();
@@ -392,10 +387,7 @@ void ray_tracer_kernel(
         }
         else if (toa_exit)
         {
-            if (photons[n].status == Photon_status::Enabled)
-            {
-                write_photon_out(&toa_up_count[ij], photons_shot, 1);
-            }
+            write_photon_out(&toa_up_count[ij], photons_shot, 1);
 
             reset_photon(
                     photons[n], photons_shot, toa_down_count,
@@ -454,14 +446,10 @@ void ray_tracer_kernel(
             // Absorption.
             else
             {
-                if (photons[n].status == Photon_status::Enabled)
-                {
-
-                    if (photons[n].kind == Photon_kind::Direct)
-                        write_photon_out(&atmos_direct_count[ijk], photons_shot, 1);
-                    else
-                        write_photon_out(&atmos_diffuse_count[ijk], photons_shot, 1);
-                }
+                if (photons[n].kind == Photon_kind::Direct)
+                    write_photon_out(&atmos_direct_count[ijk], photons_shot, 1);
+                else
+                    write_photon_out(&atmos_diffuse_count[ijk], photons_shot, 1);
 
                 reset_photon(
                         photons[n], photons_shot, toa_down_count,
