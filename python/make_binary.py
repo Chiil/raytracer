@@ -1,7 +1,7 @@
 import netCDF4 as nc
 import numpy as np
 
-ngpt = 2
+ngpt = 19
 
 ncfile = nc.Dataset("cabauw_output_res.nc", "r")
 k_ext_cloud = ncfile.variables["kext_cloud"][1, :, :, :]
