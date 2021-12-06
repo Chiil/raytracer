@@ -307,7 +307,7 @@ void ray_tracer_kernel(
     while (photons_shot < photons_to_shoot)
     {        
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
-        const Float dn = sample_tau(rng()) / k_ext_null;
+        const Float dn = max(Float_epsilon, sample_tau(rng()) / k_ext_null);
         Float dx = photons[n].direction.x * dn;
         Float dy = photons[n].direction.y * dn;
         Float dz = photons[n].direction.z * dn;
