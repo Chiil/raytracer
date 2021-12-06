@@ -269,6 +269,8 @@ __global__
 void cloud_mask_kernel(
     const Optics_scat* __restrict__ ssa_asy,
     Int* __restrict__ cloud_mask_v,
+    Float* __restrict__ cloud_dims,
+    const Float dz_grid,
     const int itot, const int jtot, const int ktot)
 {
     const int k = blockDim.x * blockIdx.x + threadIdx.x;
@@ -286,7 +288,25 @@ void cloud_mask_kernel(
                 }
             }
     }
-
+    __syncthreads();
+    if (k==0)
+    {
+        for (int i=0; i<ktot; ++i)
+            if (cloud_mask_v[i]==1)
+            {
+                cloud_dims[0] = i*dz_grid;
+                return;
+            }
+    }
+    if (k==1)
+    {
+        for (int i=ktot; i>0; --i)
+            if (cloud_mask_v[i]==1)
+            {
+                cloud_dims[1] = (i+1)*dz_grid;
+                return;
+            }
+    }
 }
 
 __global__
@@ -591,22 +611,31 @@ void run_ray_tracer(const Int n_photons)
     copy_to_gpu(atmos_direct_count_gpu, atmos_direct_count.data(), itot*jtot*ktot);
     copy_to_gpu(atmos_diffuse_count_gpu, atmos_diffuse_count.data(), itot*jtot*ktot);
 
-    // Cloud_masks
+    // Cloud dimensions
     std::vector<Int> cloud_mask_v(ktot);
-    Int* cloud_mask_v_gpu = allocate_gpu<Int>(ktot);
-    copy_to_gpu(cloud_mask_v_gpu, cloud_mask_v.data(), ktot);
+    std::vector<Float> cloud_dims(2);
     
-    const int block_size_m = 5;
-    const int grid_size_m = ktot/block_size_m + (ktot%block_size_m>0);
-    dim3 grid_m{grid_size_m}, block_m{block_size_m};
+    Int* cloud_mask_v_gpu = allocate_gpu<Int>(ktot);
+    Float* cloud_dims_gpu = allocate_gpu<Float>(2);
+
+    copy_to_gpu(cloud_mask_v_gpu, cloud_mask_v.data(), ktot);
+    copy_to_gpu(cloud_dims_gpu, cloud_dims.data(), 2);
+    
+    const int block_size_m = ktot;
+    dim3 grid_m{1}, block_m{block_size_m};
     auto start_m = std::chrono::high_resolution_clock::now();
+    
     cloud_mask_kernel<<<grid_m, block_m>>>(
             ssa_asy_gpu, cloud_mask_v_gpu,
+            cloud_dims_gpu, dz_grid,
             itot, jtot, ktot);
+    
     auto end_m = std::chrono::high_resolution_clock::now();
     double duration_m = std::chrono::duration_cast<std::chrono::duration<double>>(end_m - start_m).count();
-    std::cout << "Duratio cloud-mask computation: " << std::setprecision(5) << duration_m << " (s)" << std::endl;
+    std::cout << "Duration cloud-mask computation: " << std::setprecision(5) << duration_m << " (s)" << std::endl;
         
+    copy_from_gpu(cloud_dims.data(), cloud_dims_gpu, 2);
+    std::cout<<cloud_dims[0]<<" - "<<cloud_dims[1]<<std::endl;
     //// RUN THE RAY TRACER ////
     Photon* photons = allocate_gpu<Photon>(grid_size*block_size);
 
