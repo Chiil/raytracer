@@ -321,18 +321,23 @@ void ray_tracer_kernel(
         Int* __restrict__ atmos_direct_count,
         Int* __restrict__ atmos_diffuse_count,
         const Optics_ext* __restrict__ k_ext, const Optics_scat* __restrict__ ssa_asy,
-        const Float k_ext_null, const Float k_ext_gas,
+        const Float k_ext_null_cld, const Float k_ext_null_gas,
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const Float dir_z, 
         const int itot, const int jtot, const int ktot,
-        curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants)
+        curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants,
+        const Float* __restrict__ cloud_dims)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
-
+    
     Random_number_generator<Float> rng(n);
     Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n * photons_to_shoot);
+
+    const Float cloud_min = cloud_dims[0];
+    const Float cloud_max = cloud_dims[1];
+    const Float s_min = x_size * Float_epsilon;
 
     // Set up the initial photons.
     const bool completed = false;
@@ -346,17 +351,69 @@ void ray_tracer_kernel(
             dir_x, dir_y, dir_z,
             completed,
             itot, jtot);
-   
+    
+    Float tau;
+    bool surface_exit = false;
+    bool toa_exit = false;
+    bool transition = false;
+    
+
     while (photons_shot < photons_to_shoot)
-    {        
+    {       
+        
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
+        const bool photon_in_cloud = (photons[n].position.z >= cloud_min && photons[n].position.z <= cloud_max);
+
+        const Float k_ext_null = photon_in_cloud ? k_ext_null_cld : k_ext_null_gas;
+        if (!transition) tau = sample_tau(rng());
+
         const Float dn = max(Float_epsilon, sample_tau(rng()) / k_ext_null);
         Float dx = photons[n].direction.x * dn;
         Float dy = photons[n].direction.y * dn;
         Float dz = photons[n].direction.z * dn;
+        
+        surface_exit = false;
+        toa_exit = false;
+        transition = false;
 
-        bool surface_exit = false;
-        bool toa_exit = false;
+        if (photon_in_cloud)
+        {
+            const double fac = (photons[n].direction.z > 0 ? (cloud_max-photons[n].position.z)/dz : (cloud_min-photons[n].position.z)/dz);
+            if (fac < 1)
+            {
+                dx *= fac;
+                dy *= fac;
+                dz *= fac;
+                transition=true;
+
+                if (photons[n].position.z == cloud_min)
+                    if (photons[n].direction.z < 0)
+                        photons[n].position.z -= s_min;
+                
+                if (photons[n].position.z == cloud_max)
+                    if (photons[n].direction.z > 0)
+                        photons[n].position.z += s_min;
+            }
+        }
+        // photon above cloud layer, but about to cross it! 
+        else if (photons[n].position.z > cloud_max && photons[n].position.z + dz <= cloud_max)
+        {
+            const double fac = std::abs((photons[n].position.z - cloud_max) / dz);
+            dx *= fac;
+            dy *= fac;
+            dz *= fac;
+            transition=true;
+        }
+        
+        // photon below cloud layer, but about to cross it! (if "constant_gas" is enabled)
+        else if (photons[n].position.z < cloud_min && photons[n].position.z + dz >= cloud_min)
+        {
+            const double fac = std::abs((photons[n].position.z - cloud_min) / dz);
+            dx *= fac;
+            dy *= fac;
+            dz *= fac;
+            transition=true;
+        }
 
         if ((photons[n].position.z + dz) <= Float(0.))
         {
@@ -440,6 +497,10 @@ void ray_tracer_kernel(
                     dir_x, dir_y, dir_z,
                     photon_generation_completed,
                     itot, jtot);
+        }
+        else if (transition)
+        {
+            tau -= dn * k_ext_null;
         }
         else
         {
@@ -666,7 +727,8 @@ void run_ray_tracer(const Int n_photons)
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
             itot, jtot, ktot,
-            qrng_vectors_gpu, qrng_constants_gpu);
+            qrng_vectors_gpu, qrng_constants_gpu,
+            cloud_dims_gpu);
 
     cuda_safe_call(cudaDeviceSynchronize());
 
