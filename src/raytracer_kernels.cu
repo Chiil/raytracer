@@ -457,9 +457,9 @@ void ray_tracer_kernel(
         {
             // Add surface irradiance
             if (photons[n].kind == Photon_kind::Direct)
-                write_photon_out(&surface_down_direct_count[ij], weight*(1-surface_albedo));
+                write_photon_out(&surface_down_direct_count[ij], weight);
             else if (photons[n].kind == Photon_kind::Diffuse)
-                write_photon_out(&surface_down_diffuse_count[ij], weight*(1-surface_albedo));
+                write_photon_out(&surface_down_diffuse_count[ij], weight);
 
             // Update weights and add upward surface flux
             weight *= surface_albedo;
