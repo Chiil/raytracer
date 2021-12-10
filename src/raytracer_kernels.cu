@@ -25,6 +25,8 @@ const Float Float_epsilon = FLT_EPSILON;
 constexpr int block_size = 512;
 constexpr int grid_size = 64;
 
+constexpr Float w_thres = 0.5;
+
 struct Vector
 {
     Float x;
@@ -179,14 +181,15 @@ inline int float_to_int(const float s_size, const float ds, const int ntot_max)
 
 __device__
 inline void reset_photon(
-        Photon& photon, Int& photons_shot, Int* __restrict__ const toa_down_count,
+        Photon& photon, Int& photons_shot, Float* __restrict__ const toa_down_count,
         const unsigned int random_number_x, const unsigned int random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
         const Float dir_x, const Float dir_y, const float dir_z,
-        const bool generation_completed,
+        const bool generation_completed, Float& weight,
         const int itot, const int jtot)
 {
+    ++photons_shot;
     if (!generation_completed)
     {
         const int i = random_number_x / static_cast<unsigned int>((1ULL << 32) / itot);
@@ -201,9 +204,12 @@ inline void reset_photon(
         photon.direction.z = dir_z;
 
         photon.kind = Photon_kind::Direct;
-
+        
         const int ij = i + j*itot;
         atomicAdd(&toa_down_count[ij], 1);
+    
+        weight = 1;
+
     }
 }
 
@@ -254,10 +260,9 @@ struct Quasi_random_number_generator_2d
 
 
 __device__
-inline void write_photon_out(Int* field_out, Int& photons_shot, const Int inc)
+inline void write_photon_out(Float* field_out, const Float w)
 {
-    photons_shot += inc;
-    atomicAdd(field_out, 1);
+    atomicAdd(field_out, w);
 }
 
 __global__
@@ -336,15 +341,16 @@ void ray_tracer_kernel(
 
     // Set up the initial photons.
     const bool completed = false;
-    Int photons_shot = 0;
-    
+    Int photons_shot = Atomic_reduce_const;
+    Float weight;
+
     reset_photon(
             photons[n], photons_shot, toa_down_count,
             qrng.x(), qrng.y(),
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
             dir_x, dir_y, dir_z,
-            completed,
+            completed, weight,
             itot, jtot);
     
     Float tau;
@@ -355,7 +361,6 @@ void ray_tracer_kernel(
 
     while (photons_shot < photons_to_shoot)
     {       
-        
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
         const bool photon_in_cloud = (photons[n].position.z >= cloud_min && photons[n].position.z <= cloud_max);
 
@@ -451,14 +456,14 @@ void ray_tracer_kernel(
         if (surface_exit)
         {
             if (photons[n].kind == Photon_kind::Direct)
-                write_photon_out(&surface_down_direct_count[ij], photons_shot, 1);
+                write_photon_out(&surface_down_direct_count[ij], weight);
             else if (photons[n].kind == Photon_kind::Diffuse)
-                write_photon_out(&surface_down_diffuse_count[ij], photons_shot, 1);
+                write_photon_out(&surface_down_diffuse_count[ij], weight);
 
             // Surface scatter if smaller than albedo, otherwise absorb
-            if (rng() <= surface_albedo)
+            if (rng() < surface_albedo)
             {
-                write_photon_out(&surface_up_count[ij], photons_shot, Atomic_reduce_const);
+                write_photon_out(&surface_up_count[ij], weight);
 
                 const Float mu_surface = sqrt(rng());
                 const Float azimuth_surface = Float(2.*M_PI)*rng();
@@ -476,21 +481,20 @@ void ray_tracer_kernel(
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
-                        photon_generation_completed,
+                        photon_generation_completed, weight,
                         itot, jtot);
             }
         }
         else if (toa_exit)
         {
-            write_photon_out(&toa_up_count[ij], photons_shot, 1);
-
+            write_photon_out(&toa_up_count[ij], weight);
             reset_photon(
                     photons[n], photons_shot, toa_down_count,
                     qrng.x(), qrng.y(),
                     x_size, y_size, z_size,
                     dx_grid, dy_grid, dz_grid,
                     dir_x, dir_y, dir_z,
-                    photon_generation_completed,
+                    photon_generation_completed, weight,
                     itot, jtot);
         }
         else if (transition)
@@ -505,59 +509,72 @@ void ray_tracer_kernel(
 
             // Handle the action.
             const Float random_number = rng();
+            const Float k_ext_tot = k_ext[ijk].gas + k_ext[ijk].cloud;
+            
+            // Compute probability not being absorbed and store weighted absorption probability
+            const Float f_no_abs = Float(1.) - (Float(1.) - ssa_asy[ijk].ssa) * (k_ext_tot/k_ext_null);
+            if (photons[n].kind == Photon_kind::Direct)
+                write_photon_out(&atmos_direct_count[ijk], weight*(1-f_no_abs));
+            else
+                write_photon_out(&atmos_diffuse_count[ijk], weight*(1-f_no_abs));
+            
 
-            // Null collision.
-            if (random_number >= ((k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null))
-            {
-            }
-            // Scattering.
-            else if (random_number <= ssa_asy[ijk].ssa * (k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null)
-            {
-                const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
-                const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
-                const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
+            // Update weights (see Iwabuchi 2006: https://doi.org/10.1175/JAS3755.1)
+            weight *= f_no_abs;
+            if (weight < w_thres)
+                weight = (rng() > weight) ? Float(0.) : Float(1.);
 
-                Vector t1{Float(0.), Float(0.), Float(0.)};
-                if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
+            // only with nonzero weight continue ray tracing, else start new ray
+            if (weight > Float(0.))
+            {
+                // Null collision.
+                if (random_number >= ssa_asy[ijk].ssa / (ssa_asy[ijk].ssa- 1 + k_ext_null / k_ext_tot))
                 {
-                    if (fabs(photons[n].direction.x) < fabs(photons[n].direction.z))
-                        t1.x = Float(1.);
-                    else
-                        t1.z = Float(1.);
                 }
+                // Scattering.
                 else
                 {
-                    if (fabs(photons[n].direction.y) < fabs(photons[n].direction.z))
-                        t1.y = Float(1.);
+                    const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
+                    const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
+                    const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
+
+                    Vector t1{Float(0.), Float(0.), Float(0.)};
+                    if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
+                    {
+                        if (fabs(photons[n].direction.x) < fabs(photons[n].direction.z))
+                            t1.x = Float(1.);
+                        else
+                            t1.z = Float(1.);
+                    }
                     else
-                        t1.z = Float(1.);
+                    {
+                        if (fabs(photons[n].direction.y) < fabs(photons[n].direction.z))
+                            t1.y = Float(1.);
+                        else
+                            t1.z = Float(1.);
+                    }
+                    t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
+                    Vector t2 = cross(photons[n].direction, t1);
+
+                    const Float phi = Float(2.*M_PI)*rng();
+
+                    photons[n].direction = cos_scat*photons[n].direction
+                            + sin_scat*(sin(phi)*t1 + cos(phi)*t2);
+
+                    photons[n].kind = Photon_kind::Diffuse;
                 }
-                t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
-                Vector t2 = cross(photons[n].direction, t1);
-
-                const Float phi = Float(2.*M_PI)*rng();
-
-                photons[n].direction = cos_scat*photons[n].direction
-                        + sin_scat*(sin(phi)*t1 + cos(phi)*t2);
-
-                photons[n].kind = Photon_kind::Diffuse;
             }
-            // Absorption.
             else
             {
-                if (photons[n].kind == Photon_kind::Direct)
-                    write_photon_out(&atmos_direct_count[ijk], photons_shot, 1);
-                else
-                    write_photon_out(&atmos_diffuse_count[ijk], photons_shot, 1);
-
                 reset_photon(
                         photons[n], photons_shot, toa_down_count,
                         qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
                         dir_x, dir_y, dir_z,
-                        photon_generation_completed,
+                        photon_generation_completed, weight,
                         itot, jtot);
+    
             }
         }
     }
