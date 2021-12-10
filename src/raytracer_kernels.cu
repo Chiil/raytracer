@@ -455,16 +455,22 @@ void ray_tracer_kernel(
 
         if (surface_exit)
         {
+            // Add surface irradiance
             if (photons[n].kind == Photon_kind::Direct)
-                write_photon_out(&surface_down_direct_count[ij], weight);
+                write_photon_out(&surface_down_direct_count[ij], weight*(1-surface_albedo));
             else if (photons[n].kind == Photon_kind::Diffuse)
-                write_photon_out(&surface_down_diffuse_count[ij], weight);
+                write_photon_out(&surface_down_diffuse_count[ij], weight*(1-surface_albedo));
 
-            // Surface scatter if smaller than albedo, otherwise absorb
-            if (rng() < surface_albedo)
+            // Update weights and add upward surface flux
+            weight *= surface_albedo;
+            write_photon_out(&surface_up_count[ij], weight);
+
+            if (weight < w_thres)
+                weight = (rng() > weight) ? Float(0.) : Float(1.);
+
+            // only with nonzero weight continue ray tracing, else start new ray
+            if (weight > Float(0.))
             {
-                write_photon_out(&surface_up_count[ij], weight);
-
                 const Float mu_surface = sqrt(rng());
                 const Float azimuth_surface = Float(2.*M_PI)*rng();
 
