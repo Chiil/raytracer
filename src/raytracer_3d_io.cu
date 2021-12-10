@@ -78,13 +78,13 @@ void run_ray_tracer(const Int n_photons)
 
 
     //// PREPARE OUTPUT ARRAYS ////
-    std::vector<Int> surface_down_direct_count(itot*jtot);
-    std::vector<Int> surface_down_diffuse_count(itot*jtot);
-    std::vector<Int> surface_up_count(itot*jtot);
-    std::vector<Int> toa_down_count(itot*jtot);
-    std::vector<Int> toa_up_count(itot*jtot);
-    std::vector<Int> atmos_direct_count(itot*jtot*ktot);
-    std::vector<Int> atmos_diffuse_count(itot*jtot*ktot);
+    std::vector<Float> surface_down_direct_count(itot*jtot);
+    std::vector<Float> surface_down_diffuse_count(itot*jtot);
+    std::vector<Float> surface_up_count(itot*jtot);
+    std::vector<Float> toa_down_count(itot*jtot);
+    std::vector<Float> toa_up_count(itot*jtot);
+    std::vector<Float> atmos_direct_count(itot*jtot*ktot);
+    std::vector<Float> atmos_diffuse_count(itot*jtot*ktot);
 
 
     //// COPY THE DATA TO THE GPU.
@@ -96,13 +96,13 @@ void run_ray_tracer(const Int n_photons)
     copy_to_gpu(ssa_asy_gpu, ssa_asy.data(), itot*jtot*ktot);
 
     // Output arrays. Copy them in order to enable restarts later.
-    Int* surface_down_direct_count_gpu = allocate_gpu<Int>(itot*jtot);
-    Int* surface_down_diffuse_count_gpu = allocate_gpu<Int>(itot*jtot);
-    Int* surface_up_count_gpu = allocate_gpu<Int>(itot*jtot);
-    Int* toa_down_count_gpu = allocate_gpu<Int>(itot*jtot);
-    Int* toa_up_count_gpu = allocate_gpu<Int>(itot*jtot);
-    Int* atmos_direct_count_gpu = allocate_gpu<Int>(itot*jtot*ktot);
-    Int* atmos_diffuse_count_gpu = allocate_gpu<Int>(itot*jtot*ktot);
+    Float* surface_down_direct_count_gpu = allocate_gpu<Float>(itot*jtot);
+    Float* surface_down_diffuse_count_gpu = allocate_gpu<Float>(itot*jtot);
+    Float* surface_up_count_gpu = allocate_gpu<Float>(itot*jtot);
+    Float* toa_down_count_gpu = allocate_gpu<Float>(itot*jtot);
+    Float* toa_up_count_gpu = allocate_gpu<Float>(itot*jtot);
+    Float* atmos_direct_count_gpu = allocate_gpu<Float>(itot*jtot*ktot);
+    Float* atmos_diffuse_count_gpu = allocate_gpu<Float>(itot*jtot*ktot);
 
     copy_to_gpu(surface_down_direct_count_gpu, surface_down_direct_count.data(), itot*jtot);
     copy_to_gpu(surface_down_diffuse_count_gpu, surface_down_diffuse_count.data(), itot*jtot);
@@ -195,7 +195,7 @@ void run_ray_tracer(const Int n_photons)
         std::ofstream binary_file(name + ".bin", std::ios::out | std::ios::trunc | std::ios::binary);
 
         if (binary_file)
-            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(Int));
+            binary_file.write(reinterpret_cast<const char*>(ptr), size*sizeof(Float));
         else
         {
             std::string error = "Cannot write file \"" + name + ".bin\"";
