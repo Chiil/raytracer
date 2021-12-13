@@ -10,6 +10,7 @@ ssa = ncfile.variables["ssa"][ngpt, :, :, :]
 asy = ncfile.variables["g"][ngpt, :, :, :]
 asy[265:269,:,:] = 0
 ssa[265:269,:,:] = ssa[264,:,:]
+k_ext_cloud[265:269,:,:] = 0
 
 k_ext_cloud.data.tofile("k_ext_cloud.bin")
 k_ext_gas.data.tofile("k_ext_gas.bin")

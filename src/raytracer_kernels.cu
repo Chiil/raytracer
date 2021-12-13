@@ -386,12 +386,10 @@ void ray_tracer_kernel(
                 dz *= fac;
                 transition=true;
 
-                if (photons[n].position.z == cloud_min)
-                    if (photons[n].direction.z < 0)
+                if (((photons[n].position.z - cloud_min) < Float_epsilon) && (photons[n].direction.z < 0))
                         photons[n].position.z -= s_min;
                 
-                if (photons[n].position.z == cloud_max)
-                    if (photons[n].direction.z > 0)
+                if (((cloud_max - photons[n].position.z) < Float_epsilon) && (photons[n].direction.z > 0))
                         photons[n].position.z += s_min;
             }
         }
@@ -540,7 +538,7 @@ void ray_tracer_kernel(
                 // Scattering.
                 else
                 {
-                    const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
+                    const bool cloud_scatter = rng() < (k_ext[ijk].cloud / k_ext_tot);
                     const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
                     const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
