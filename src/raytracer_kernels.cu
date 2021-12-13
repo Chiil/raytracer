@@ -312,7 +312,6 @@ void cloud_mask_kernel(
 __global__
 void ray_tracer_kernel(
         const Int photons_to_shoot,
-        //Photon* __restrict__ photons,
         Float* __restrict__ toa_down_count,
         Float* __restrict__ toa_up_count,
         Float* __restrict__ surface_down_direct_count,
