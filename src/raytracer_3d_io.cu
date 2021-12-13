@@ -139,8 +139,6 @@ void run_ray_tracer(const Int n_photons)
     std::cout<<cloud_dims[0]<<" - "<<cloud_dims[1]<<std::endl;
 
     //// RUN THE RAY TRACER ////
-    Photon* photons = allocate_gpu<Photon>(grid_size*block_size);
-
     curandDirectionVectors32_t* qrng_vectors;
     curandGetDirectionVectors32(
                 &qrng_vectors,
@@ -158,7 +156,7 @@ void run_ray_tracer(const Int n_photons)
     auto start = std::chrono::high_resolution_clock::now();
 
     ray_tracer_kernel<<<grid, block>>>(
-            photons_per_thread, photons,
+            photons_per_thread, 
             toa_down_count_gpu, toa_up_count_gpu,
             surface_down_direct_count_gpu, surface_down_diffuse_count_gpu, surface_up_count_gpu,
             atmos_direct_count_gpu, atmos_diffuse_count_gpu,

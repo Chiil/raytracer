@@ -312,7 +312,7 @@ void cloud_mask_kernel(
 __global__
 void ray_tracer_kernel(
         const Int photons_to_shoot,
-        Photon* __restrict__ photons,
+        //Photon* __restrict__ photons,
         Float* __restrict__ toa_down_count,
         Float* __restrict__ toa_up_count,
         Float* __restrict__ surface_down_direct_count,
@@ -331,7 +331,7 @@ void ray_tracer_kernel(
         const Float* __restrict__ cloud_dims)
 {
     const int n = blockDim.x * blockIdx.x + threadIdx.x;
-    
+    Photon photon;
     Random_number_generator<Float> rng(n);
     Quasi_random_number_generator_2d qrng(qrng_vectors, qrng_constants, n * photons_to_shoot);
 
@@ -345,7 +345,7 @@ void ray_tracer_kernel(
     Float weight;
 
     reset_photon(
-            photons[n], photons_shot, toa_down_count,
+            photon, photons_shot, toa_down_count,
             qrng.x(), qrng.y(),
             x_size, y_size, z_size,
             dx_grid, dy_grid, dz_grid,
@@ -362,15 +362,15 @@ void ray_tracer_kernel(
     while (photons_shot < photons_to_shoot)
     {       
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
-        const bool photon_in_cloud = (photons[n].position.z >= cloud_min && photons[n].position.z <= cloud_max);
+        const bool photon_in_cloud = (photon.position.z >= cloud_min && photon.position.z <= cloud_max);
 
         const Float k_ext_null = photon_in_cloud ? k_ext_null_cld : k_ext_null_gas;
         if (!transition) tau = sample_tau(rng());
 
         const Float dn = max(Float_epsilon, sample_tau(rng()) / k_ext_null);
-        Float dx = photons[n].direction.x * dn;
-        Float dy = photons[n].direction.y * dn;
-        Float dz = photons[n].direction.z * dn;
+        Float dx = photon.direction.x * dn;
+        Float dy = photon.direction.y * dn;
+        Float dz = photon.direction.z * dn;
         
         surface_exit = false;
         toa_exit = false;
@@ -378,7 +378,7 @@ void ray_tracer_kernel(
 
         if (photon_in_cloud)
         {
-            const double fac = (photons[n].direction.z > 0 ? (cloud_max-photons[n].position.z)/dz : (cloud_min-photons[n].position.z)/dz);
+            const double fac = (photon.direction.z > 0 ? (cloud_max-photon.position.z)/dz : (cloud_min-photon.position.z)/dz);
             if (fac < 1)
             {
                 dx *= fac;
@@ -386,17 +386,17 @@ void ray_tracer_kernel(
                 dz *= fac;
                 transition=true;
 
-                if (((photons[n].position.z - cloud_min) < Float_epsilon) && (photons[n].direction.z < 0))
-                        photons[n].position.z -= s_min;
+                if (((photon.position.z - cloud_min) < Float_epsilon) && (photon.direction.z < 0))
+                        photon.position.z -= s_min;
                 
-                if (((cloud_max - photons[n].position.z) < Float_epsilon) && (photons[n].direction.z > 0))
-                        photons[n].position.z += s_min;
+                if (((cloud_max - photon.position.z) < Float_epsilon) && (photon.direction.z > 0))
+                        photon.position.z += s_min;
             }
         }
         // photon above cloud layer, but about to cross it! 
-        else if (photons[n].position.z > cloud_max && photons[n].position.z + dz <= cloud_max)
+        else if (photon.position.z > cloud_max && photon.position.z + dz <= cloud_max)
         {
-            const double fac = std::abs((photons[n].position.z - cloud_max) / dz);
+            const double fac = std::abs((photon.position.z - cloud_max) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
@@ -404,27 +404,27 @@ void ray_tracer_kernel(
         }
         
         // photon below cloud layer, but about to cross it! (if "constant_gas" is enabled)
-        else if (photons[n].position.z < cloud_min && photons[n].position.z + dz >= cloud_min)
+        else if (photon.position.z < cloud_min && photon.position.z + dz >= cloud_min)
         {
-            const double fac = std::abs((photons[n].position.z - cloud_min) / dz);
+            const double fac = std::abs((photon.position.z - cloud_min) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
             transition=true;
         }
 
-        if ((photons[n].position.z + dz) <= Float(0.))
+        if ((photon.position.z + dz) <= Float(0.))
         {
-            const Float fac = abs(photons[n].position.z / dz);
+            const Float fac = abs(photon.position.z / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
 
             surface_exit = true;
         }
-        else if ((photons[n].position.z + dz) >= z_size)
+        else if ((photon.position.z + dz) >= z_size)
         {
-            const Float fac = abs((z_size - photons[n].position.z) / dz);
+            const Float fac = abs((z_size - photon.position.z) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
@@ -432,31 +432,31 @@ void ray_tracer_kernel(
             toa_exit = true;
         }
 
-        photons[n].position.x += dx;
-        photons[n].position.y += dy;
-        photons[n].position.z += dz;
+        photon.position.x += dx;
+        photon.position.y += dy;
+        photon.position.z += dz;
 
         // Cyclic boundary condition in x.
-        photons[n].position.x = fmod(photons[n].position.x, x_size);
-        if (photons[n].position.x < Float(0.))
-            photons[n].position.x += x_size;
+        photon.position.x = fmod(photon.position.x, x_size);
+        if (photon.position.x < Float(0.))
+            photon.position.x += x_size;
 
         // Cyclic boundary condition in y.
-        photons[n].position.y = fmod(photons[n].position.y, y_size);
-        if (photons[n].position.y < Float(0.))
-            photons[n].position.y += y_size;
+        photon.position.y = fmod(photon.position.y, y_size);
+        if (photon.position.y < Float(0.))
+            photon.position.y += y_size;
 
         // Handle the surface and top exits.
-        const int i = float_to_int(photons[n].position.x, dx_grid, itot);
-        const int j = float_to_int(photons[n].position.y, dy_grid, jtot);
+        const int i = float_to_int(photon.position.x, dx_grid, itot);
+        const int j = float_to_int(photon.position.y, dy_grid, jtot);
         const int ij = i + j*itot;
 
         if (surface_exit)
         {
             // Add surface irradiance
-            if (photons[n].kind == Photon_kind::Direct)
+            if (photon.kind == Photon_kind::Direct)
                 write_photon_out(&surface_down_direct_count[ij], weight);
-            else if (photons[n].kind == Photon_kind::Diffuse)
+            else if (photon.kind == Photon_kind::Diffuse)
                 write_photon_out(&surface_down_diffuse_count[ij], weight);
 
             // Update weights and add upward surface flux
@@ -472,15 +472,15 @@ void ray_tracer_kernel(
                 const Float mu_surface = sqrt(rng());
                 const Float azimuth_surface = Float(2.*M_PI)*rng();
 
-                photons[n].direction.x = mu_surface*sin(azimuth_surface);
-                photons[n].direction.y = mu_surface*cos(azimuth_surface);
-                photons[n].direction.z = sqrt(Float(1.) - mu_surface*mu_surface + Float_epsilon);
-                photons[n].kind = Photon_kind::Diffuse;
+                photon.direction.x = mu_surface*sin(azimuth_surface);
+                photon.direction.y = mu_surface*cos(azimuth_surface);
+                photon.direction.z = sqrt(Float(1.) - mu_surface*mu_surface + Float_epsilon);
+                photon.kind = Photon_kind::Diffuse;
             }
             else
             {
                 reset_photon(
-                        photons[n], photons_shot, toa_down_count,
+                        photon, photons_shot, toa_down_count,
                         qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
@@ -493,7 +493,7 @@ void ray_tracer_kernel(
         {
             write_photon_out(&toa_up_count[ij], weight);
             reset_photon(
-                    photons[n], photons_shot, toa_down_count,
+                    photon, photons_shot, toa_down_count,
                     qrng.x(), qrng.y(),
                     x_size, y_size, z_size,
                     dx_grid, dy_grid, dz_grid,
@@ -508,7 +508,7 @@ void ray_tracer_kernel(
         else
         {
             // Calculate the 3D index.
-            const int k = float_to_int(photons[n].position.z, dz_grid, ktot);
+            const int k = float_to_int(photon.position.z, dz_grid, ktot);
             const int ijk = i + j*itot + k*itot*jtot;
 
             // Handle the action.
@@ -517,7 +517,7 @@ void ray_tracer_kernel(
             
             // Compute probability not being absorbed and store weighted absorption probability
             const Float f_no_abs = Float(1.) - (Float(1.) - ssa_asy[ijk].ssa) * (k_ext_tot/k_ext_null);
-            if (photons[n].kind == Photon_kind::Direct)
+            if (photon.kind == Photon_kind::Direct)
                 write_photon_out(&atmos_direct_count[ijk], weight*(1-f_no_abs));
             else
                 write_photon_out(&atmos_diffuse_count[ijk], weight*(1-f_no_abs));
@@ -532,7 +532,7 @@ void ray_tracer_kernel(
             if (weight > Float(0.))
             {
                 // Null collision.
-                if (random_number >= ssa_asy[ijk].ssa / (ssa_asy[ijk].ssa- 1 + k_ext_null / k_ext_tot))
+                if (random_number >= ssa_asy[ijk].ssa / (ssa_asy[ijk].ssa - Float(1.) + k_ext_null / k_ext_tot))
                 {
                 }
                 // Scattering.
@@ -543,35 +543,35 @@ void ray_tracer_kernel(
                     const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
                     Vector t1{Float(0.), Float(0.), Float(0.)};
-                    if (fabs(photons[n].direction.x) < fabs(photons[n].direction.y))
+                    if (fabs(photon.direction.x) < fabs(photon.direction.y))
                     {
-                        if (fabs(photons[n].direction.x) < fabs(photons[n].direction.z))
+                        if (fabs(photon.direction.x) < fabs(photon.direction.z))
                             t1.x = Float(1.);
                         else
                             t1.z = Float(1.);
                     }
                     else
                     {
-                        if (fabs(photons[n].direction.y) < fabs(photons[n].direction.z))
+                        if (fabs(photon.direction.y) < fabs(photon.direction.z))
                             t1.y = Float(1.);
                         else
                             t1.z = Float(1.);
                     }
-                    t1 = normalize(t1 - photons[n].direction*dot(t1, photons[n].direction));
-                    Vector t2 = cross(photons[n].direction, t1);
+                    t1 = normalize(t1 - photon.direction*dot(t1, photon.direction));
+                    Vector t2 = cross(photon.direction, t1);
 
                     const Float phi = Float(2.*M_PI)*rng();
 
-                    photons[n].direction = cos_scat*photons[n].direction
+                    photon.direction = cos_scat*photon.direction
                             + sin_scat*(sin(phi)*t1 + cos(phi)*t2);
 
-                    photons[n].kind = Photon_kind::Diffuse;
+                    photon.kind = Photon_kind::Diffuse;
                 }
             }
             else
             {
                 reset_photon(
-                        photons[n], photons_shot, toa_down_count,
+                        photon, photons_shot, toa_down_count,
                         qrng.x(), qrng.y(),
                         x_size, y_size, z_size,
                         dx_grid, dy_grid, dz_grid,
