@@ -53,10 +53,10 @@ add_executable(raytracer src/raytracer.cpp)
 add_executable(raytracer_3d src/raytracer_3d.cpp)
 if (USECUDA)
     include_directories("src" SYSTEM ${INCLUDE_DIRS})
-    
+
     add_executable(raytracer_3d_gpu  src/raytracer_3d.cu)
     target_link_libraries(raytracer_3d_gpu curand)
- 
+
     add_executable(raytracer_3d_io_gpu  src/raytracer_3d_io.cu)
     target_link_libraries(raytracer_3d_io_gpu curand)
 

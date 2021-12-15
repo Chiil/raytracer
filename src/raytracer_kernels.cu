@@ -324,7 +324,7 @@ void ray_tracer_kernel(
         const Float surface_albedo,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
-        const Float dir_x, const Float dir_y, const Float dir_z, 
+        const Float dir_x, const Float dir_y, const Float dir_z,
         const int itot, const int jtot, const int ktot,
         curandDirectionVectors32_t* qrng_vectors, unsigned int* qrng_constants,
         const Float* __restrict__ cloud_dims)
@@ -351,26 +351,29 @@ void ray_tracer_kernel(
             dir_x, dir_y, dir_z,
             completed, weight,
             itot, jtot);
-    
+
     Float tau;
     bool surface_exit = false;
     bool toa_exit = false;
     bool transition = false;
-    
+
 
     while (photons_shot < photons_to_shoot)
-    {       
+    {
+
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
         const bool photon_in_cloud = (photon.position.z >= cloud_min && photon.position.z <= cloud_max);
 
         const Float k_ext_null = photon_in_cloud ? k_ext_null_cld : k_ext_null_gas;
-        if (!transition) tau = sample_tau(rng());
+
+        if (!transition)
+            tau = sample_tau(rng());
 
         const Float dn = max(Float_epsilon, sample_tau(rng()) / k_ext_null);
         Float dx = photon.direction.x * dn;
         Float dy = photon.direction.y * dn;
         Float dz = photon.direction.z * dn;
-        
+
         surface_exit = false;
         toa_exit = false;
         transition = false;
@@ -378,30 +381,33 @@ void ray_tracer_kernel(
         if (photon_in_cloud)
         {
             const Float fac = (photon.direction.z > 0 ? (cloud_max-photon.position.z)/dz : (cloud_min-photon.position.z)/dz);
+
             if (fac < 1)
             {
                 dx *= fac;
                 dy *= fac;
                 dz *= fac;
-                transition=true;
+
+                transition = true;
 
                 if (((photon.position.z - cloud_min) < Float_epsilon) && (photon.direction.z < 0))
                         photon.position.z -= s_min;
-                
+
                 if (((cloud_max - photon.position.z) < Float_epsilon) && (photon.direction.z > 0))
                         photon.position.z += s_min;
             }
         }
-        // photon above cloud layer, but about to cross it! 
+        // photon above cloud layer, but about to cross it!
         else if (photon.position.z > cloud_max && photon.position.z + dz <= cloud_max)
         {
             const Float fac = std::abs((photon.position.z - cloud_max) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
-            transition=true;
+
+            transition = true;
         }
-        
+
         // photon below cloud layer, but about to cross it! (if "constant_gas" is enabled)
         else if (photon.position.z < cloud_min && photon.position.z + dz >= cloud_min)
         {
@@ -409,7 +415,8 @@ void ray_tracer_kernel(
             dx *= fac;
             dy *= fac;
             dz *= fac;
-            transition=true;
+
+            transition = true;
         }
 
         if ((photon.position.z + dz) <= Float(0.))
@@ -538,6 +545,7 @@ void ray_tracer_kernel(
                 else
                 {
                     const bool cloud_scatter = rng() < (k_ext[ijk].cloud / k_ext_tot);
+
                     const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
                     const Float sin_scat = max(Float(0.), sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon));
 
@@ -582,5 +590,3 @@ void ray_tracer_kernel(
         }
     }
 }
-
-

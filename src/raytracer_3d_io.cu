@@ -24,7 +24,7 @@ void run_ray_tracer(const Int n_photons)
     const Float surface_albedo = 0.2;
     const Float zenith_angle = 50.*(M_PI/180.);
     const Float azimuth_angle = 20.*(M_PI/180.);
-    
+
     const Float dir_x = -std::sin(zenith_angle) * std::cos(azimuth_angle);
     const Float dir_y = -std::sin(zenith_angle) * std::sin(azimuth_angle);
     const Float dir_z = -std::cos(zenith_angle);
@@ -115,26 +115,26 @@ void run_ray_tracer(const Int n_photons)
     // Cloud dimensions
     std::vector<Int> cloud_mask_v(ktot);
     std::vector<Float> cloud_dims(2);
-    
+
     Int* cloud_mask_v_gpu = allocate_gpu<Int>(ktot);
     Float* cloud_dims_gpu = allocate_gpu<Float>(2);
 
     copy_to_gpu(cloud_mask_v_gpu, cloud_mask_v.data(), ktot);
     copy_to_gpu(cloud_dims_gpu, cloud_dims.data(), 2);
-    
+
     const int block_size_m = ktot;
     dim3 grid_m{1}, block_m{block_size_m};
     auto start_m = std::chrono::high_resolution_clock::now();
-    
+
     cloud_mask_kernel<<<grid_m, block_m>>>(
             ssa_asy_gpu, cloud_mask_v_gpu,
             cloud_dims_gpu, dz_grid,
             itot, jtot, ktot);
-    
+
     auto end_m = std::chrono::high_resolution_clock::now();
     double duration_m = std::chrono::duration_cast<std::chrono::duration<double>>(end_m - start_m).count();
     std::cout << "Duration cloud-mask computation: " << std::setprecision(5) << duration_m << " (s)" << std::endl;
-        
+
     copy_from_gpu(cloud_dims.data(), cloud_dims_gpu, 2);
     std::cout<<cloud_dims[0]<<" - "<<cloud_dims[1]<<std::endl;
 
@@ -152,7 +152,7 @@ void run_ray_tracer(const Int n_photons)
     copy_to_gpu(qrng_constants_gpu, qrng_constants, 2);
 
     dim3 grid{grid_size}, block{block_size};
-    
+
     auto start = std::chrono::high_resolution_clock::now();
 
     ray_tracer_kernel<<<grid, block>>>(
@@ -220,14 +220,14 @@ int main(int argc, char* argv[])
     }
 
     const Int n_photons = std::pow(Int(2), static_cast<Int>(std::stoi(argv[1])));
-    
+
     if (n_photons < grid_size * block_size)
     {
         std::cerr << "Sorry, the number of photons must be larger than " << grid_size * block_size
             << " (n >= " << std::log2(grid_size*block_size) << ") to guarantee one photon per thread" << std::endl;
         return 1;
     }
-    
+
     run_ray_tracer(n_photons);
 
     return 0;
