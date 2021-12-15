@@ -539,7 +539,7 @@ void ray_tracer_kernel(
                 {
                     const bool cloud_scatter = rng() < (k_ext[ijk].cloud / k_ext_tot);
                     const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
-                    const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
+                    const Float sin_scat = max(Float(0.), sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon));
 
                     Vector t1{Float(0.), Float(0.), Float(0.)};
                     if (fabs(photon.direction.x) < fabs(photon.direction.y))
