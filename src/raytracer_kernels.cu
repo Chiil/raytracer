@@ -360,7 +360,9 @@ void ray_tracer_kernel(
         const bool photon_in_cloud = (photons[n].position.z >= cloud_min && photons[n].position.z <= cloud_max);
 
         const Float k_ext_null = photon_in_cloud ? k_ext_null_cld : k_ext_null_gas;
-        if (!transition) tau = sample_tau(rng());
+
+        if (!transition)
+            tau = sample_tau(rng());
 
         const Float dn = max(Float_epsilon, sample_tau(rng()) / k_ext_null);
         Float dx = photons[n].direction.x * dn;
@@ -373,41 +375,43 @@ void ray_tracer_kernel(
 
         if (photon_in_cloud)
         {
-            const double fac = (photons[n].direction.z > 0 ? (cloud_max-photons[n].position.z)/dz : (cloud_min-photons[n].position.z)/dz);
+            const double fac = (photons[n].direction.z > 0) ? (cloud_max-photons[n].position.z) / dz : (cloud_min - photons[n].position.z) / dz;
+
             if (fac < 1)
             {
                 dx *= fac;
                 dy *= fac;
                 dz *= fac;
-                transition=true;
 
-                if (photons[n].position.z == cloud_min)
-                    if (photons[n].direction.z < 0)
-                        photons[n].position.z -= s_min;
+                transition = true;
 
-                if (photons[n].position.z == cloud_max)
-                    if (photons[n].direction.z > 0)
-                        photons[n].position.z += s_min;
+                if ( (photons[n].position.z == cloud_min) && (photons[n].direction.z < 0) )
+                    photons[n].position.z -= s_min;
+
+                if ( (photons[n].position.z == cloud_max) && (photons[n].direction.z > 0) )
+                    photons[n].position.z += s_min;
             }
         }
         // photon above cloud layer, but about to cross it!
-        else if (photons[n].position.z > cloud_max && photons[n].position.z + dz <= cloud_max)
+        else if ( (photons[n].position.z > cloud_max) && (photons[n].position.z + dz <= cloud_max) )
         {
-            const double fac = std::abs((photons[n].position.z - cloud_max) / dz);
+            const Float fac = std::abs((photons[n].position.z - cloud_max) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
-            transition=true;
+
+            transition = true;
         }
 
         // photon below cloud layer, but about to cross it! (if "constant_gas" is enabled)
         else if (photons[n].position.z < cloud_min && photons[n].position.z + dz >= cloud_min)
         {
-            const double fac = std::abs((photons[n].position.z - cloud_min) / dz);
+            const Float fac = std::abs((photons[n].position.z - cloud_min) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
-            transition=true;
+
+            transition = true;
         }
 
         if ((photons[n].position.z + dz) <= Float(0.))
@@ -514,6 +518,7 @@ void ray_tracer_kernel(
             else if (random_number <= ssa_asy[ijk].ssa * (k_ext[ijk].gas + k_ext[ijk].cloud) / k_ext_null)
             {
                 const bool cloud_scatter = rng() < k_ext[ijk].cloud / (k_ext[ijk].gas + k_ext[ijk].cloud);
+
                 const Float cos_scat = cloud_scatter ? henyey(ssa_asy[ijk].asy, rng()) : rayleigh(rng());
                 const Float sin_scat = sqrt(Float(1.) - cos_scat*cos_scat + Float_epsilon);
 
@@ -562,5 +567,3 @@ void ray_tracer_kernel(
         }
     }
 }
-
-
