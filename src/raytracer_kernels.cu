@@ -377,7 +377,7 @@ void ray_tracer_kernel(
 
         if (photon_in_cloud)
         {
-            const double fac = (photon.direction.z > 0 ? (cloud_max-photon.position.z)/dz : (cloud_min-photon.position.z)/dz);
+            const Float fac = (photon.direction.z > 0 ? (cloud_max-photon.position.z)/dz : (cloud_min-photon.position.z)/dz);
             if (fac < 1)
             {
                 dx *= fac;
@@ -395,7 +395,7 @@ void ray_tracer_kernel(
         // photon above cloud layer, but about to cross it! 
         else if (photon.position.z > cloud_max && photon.position.z + dz <= cloud_max)
         {
-            const double fac = std::abs((photon.position.z - cloud_max) / dz);
+            const Float fac = std::abs((photon.position.z - cloud_max) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
@@ -405,7 +405,7 @@ void ray_tracer_kernel(
         // photon below cloud layer, but about to cross it! (if "constant_gas" is enabled)
         else if (photon.position.z < cloud_min && photon.position.z + dz >= cloud_min)
         {
-            const double fac = std::abs((photon.position.z - cloud_min) / dz);
+            const Float fac = std::abs((photon.position.z - cloud_min) / dz);
             dx *= fac;
             dy *= fac;
             dz *= fac;
