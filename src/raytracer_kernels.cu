@@ -17,7 +17,7 @@ const Int Atomic_reduce_const = (Int)(-1LL);
 
 // using Float = double;
 // const Float Float_epsilon = DBL_EPSILON;
-// constexpr int block_size = 768;
+// constexpr int block_size = 512;
 // constexpr int grid_size = 64;
 
 using Float = float;
@@ -173,7 +173,7 @@ Float sample_tau(const Float random_number)
 
 
 __device__
-inline int float_to_int(const float s_size, const float ds, const int ntot_max)
+inline int float_to_int(const Float s_size, const Float ds, const int ntot_max)
 {
     const int ntot = static_cast<int>(s_size / ds);
     return ntot < ntot_max ? ntot : ntot_max-1;
@@ -185,7 +185,7 @@ inline void reset_photon(
         const unsigned int random_number_x, const unsigned int random_number_y,
         const Float x_size, const Float y_size, const Float z_size,
         const Float dx_grid, const Float dy_grid, const Float dz_grid,
-        const Float dir_x, const Float dir_y, const float dir_z,
+        const Float dir_x, const Float dir_y, const Float dir_z,
         const bool generation_completed, Float& weight,
         const int itot, const int jtot)
 {
