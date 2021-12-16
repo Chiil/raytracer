@@ -51,9 +51,9 @@ void run_ray_tracer(const Int n_photons)
         for (int j=0; j<jtot; ++j)
             for (int i=0; i<itot; ++i)
             {
-                if (  (i+0.5)*dx_grid > 4000. && (i+0.5)*dx_grid < 5000.
-                   && (j+0.5)*dy_grid > 2700. && (j+0.5)*dy_grid < 3700.
-                   && (k+0.5)*dz_grid > 1000. && (k+0.5)*dz_grid < 1500.)
+                if (  i*dx_grid >= 0. && i*dx_grid < 800.
+                   && j*dy_grid >= 0. && j*dy_grid < 800.
+                   && k*dz_grid >= 800. && k*dz_grid < 1200.)
                 {
                     const int ijk = i + j*itot + k*itot*jtot;
                     k_ext[ijk].cloud = k_ext_cloud;
