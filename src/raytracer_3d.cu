@@ -66,7 +66,20 @@ void run_ray_tracer(const Int n_photons)
 
     // Set the step size for the transport solver to the maximum extinction coefficient.
     const Float k_ext_null = k_ext_gas + k_ext_cloud;
-
+    
+    std::vector<Float> k_null_grid(ngrid_h*ngrid_h*ngrid_v, k_ext_gas*10);
+    for (int k=0; k<ngrid_v; ++k)
+        for (int j=0; j<ngrid_h; ++j)
+            for (int i=0; i<ngrid_h; ++i)
+            {
+                if (  i*kgrid_h >= 0. && i*kgrid_h < 800.
+                   && j*kgrid_h >= 0. && j*kgrid_h < 800.
+                   && k*kgrid_v >= 800. && k*kgrid_v < 1200.)
+                {
+                    const int ijk = i + j*ngrid_h + k*ngrid_h*ngrid_h;
+                    k_null_grid[ijk] = k_ext_null;
+                }
+            }
 
     //// PREPARE OUTPUT ARRAYS ////
     std::vector<Float> surface_down_direct_count(itot*jtot);
@@ -79,6 +92,9 @@ void run_ray_tracer(const Int n_photons)
 
 
     //// COPY THE DATA TO THE GPU.
+    // kn grid
+    Float* k_null_grid_gpu = allocate_gpu<Float>(ngrid_h*ngrid_h*ngrid_v);
+    copy_to_gpu(k_null_grid_gpu, k_null_grid.data(), ngrid_h*ngrid_h*ngrid_v);
     // Input array.
     Optics_ext* k_ext_gpu = allocate_gpu<Optics_ext>(itot*jtot*ktot);
     Optics_scat* ssa_asy_gpu = allocate_gpu<Optics_scat>(itot*jtot*ktot);
@@ -145,9 +161,8 @@ void run_ray_tracer(const Int n_photons)
     dim3 grid{grid_size}, block{block_size};
 
     auto start = std::chrono::high_resolution_clock::now();
-
     ray_tracer_kernel<<<grid, block>>>(
-            photons_per_thread,
+            photons_per_thread, k_null_grid_gpu,
             toa_down_count_gpu, toa_up_count_gpu,
             surface_down_direct_count_gpu, surface_down_diffuse_count_gpu, surface_up_count_gpu,
             atmos_direct_count_gpu, atmos_diffuse_count_gpu,

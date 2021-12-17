@@ -25,10 +25,10 @@ const Float Float_epsilon = FLT_EPSILON;
 constexpr int block_size = 512;
 constexpr int grid_size = 64;
 
-constexpr int ngrid_h = 16;
-constexpr int ngrid_v = 16;
-constexpr Float kgrid_h = Float(6400.)/ngrid_h;
-constexpr Float kgrid_v = Float(3200.)/ngrid_v;
+constexpr int ngrid_h = 90;
+constexpr int ngrid_v = 71;
+constexpr Float kgrid_h = Float(24000.)/ngrid_h;
+constexpr Float kgrid_v = Float(8520.)/ngrid_v;
 constexpr Float w_thres = 0.5;
 
 struct Vector
@@ -316,6 +316,7 @@ void cloud_mask_kernel(
 __global__
 void ray_tracer_kernel(
         const Int photons_to_shoot,
+        const Float* __restrict__ k_null_grid,
         Float* __restrict__ toa_down_count,
         Float* __restrict__ toa_up_count,
         Float* __restrict__ surface_down_direct_count,
@@ -360,10 +361,8 @@ void ray_tracer_kernel(
     Float d_max = Float(0.);
     Float k_ext_null;
     bool transition = false;
-    int nn=0;
     while (photons_shot < photons_to_shoot)
     {
-        ++nn;
         const bool photon_generation_completed = (photons_shot == photons_to_shoot - 1);
         
         // if d_max is zero, find current grid and maximum distance
@@ -376,12 +375,9 @@ void ray_tracer_kernel(
             const Float sy = photon.direction.y > 0 ? ((j+1) * kgrid_h - photon.position.y)/photon.direction.y : (j*kgrid_h - photon.position.y)/photon.direction.y;
             const Float sz = photon.direction.z > 0 ? ((k+1) * kgrid_v - photon.position.z)/photon.direction.z : (k*kgrid_v - photon.position.z)/photon.direction.z;
             d_max = min(sx, min(sy, sz));
-            k_ext_null = (i<=1 && j<=1 && (k==4 || k==5)) ? k_ext_null_cld : k_ext_null_gas;
+            const int ijk = i + j*ngrid_h + k*ngrid_h*ngrid_h;
+            k_ext_null = k_null_grid[ijk];
         }
-
-        //find null collision coefficient
-        //const bool photon_in_cloud = (photon.position.z >= cloud_min && photon.position.z <= cloud_max);
-        //const Float k_ext_null = photon_in_cloud ? k_ext_null_cld : k_ext_null_gas;
 
         if (!transition)
         {
