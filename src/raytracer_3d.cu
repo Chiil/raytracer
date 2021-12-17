@@ -34,7 +34,7 @@ void run_ray_tracer(const Int n_photons)
     const Float ssa_gas = 0.5;
     const Float asy_gas = 0.;
 
-    const Float k_ext_cloud = 5.e-3;
+    const Float k_ext_cloud = 5.e-1;
     const Float ssa_cloud = 0.9;
     const Float asy_cloud = 0.85;
 
