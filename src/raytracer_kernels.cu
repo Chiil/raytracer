@@ -269,50 +269,50 @@ inline void write_photon_out(Float* field_out, const Float w)
     atomicAdd(field_out, w);
 }
 
-__global__
-void cloud_mask_kernel(
-    const Optics_scat* __restrict__ ssa_asy,
-    Int* __restrict__ cloud_mask_v,
-    Float* __restrict__ cloud_dims,
-    const Float dz_grid,
-    const int itot, const int jtot, const int ktot)
-{
-    const int k = blockDim.x * blockIdx.x + threadIdx.x;
-    if (k < ktot)
-    {
-        cloud_mask_v[k] = 0;
-        for (int j=0; j<jtot; ++j)
-            for (int i=0; i<itot; ++i)
-            {
-                const int ijk = i + j*itot + k*jtot*itot;
-                if (ssa_asy[ijk].asy > 0)
-                {
-                    cloud_mask_v[k] = 1;
-                    return;
-                }
-            }
-    }
-    __syncthreads();
-    if (k==0)
-    {
-        for (int i=0; i<ktot; ++i)
-            if (cloud_mask_v[i]==1)
-            {
-                cloud_dims[0] = i*dz_grid;
-                return;
-            }
-    }
-    if (k==1)
-    {
-        for (int i=ktot; i>0; --i)
-            if (cloud_mask_v[i]==1)
-            {
-                cloud_dims[1] = (i+1)*dz_grid;
-                return;
-            }
-    }
-}
-
+//__global__
+//void cloud_mask_kernel(
+//    const Optics_scat* __restrict__ ssa_asy,
+//    Int* __restrict__ cloud_mask_v,
+//    Float* __restrict__ cloud_dims,
+//    const Float dz_grid,
+//    const int itot, const int jtot, const int ktot)
+//{
+//    const int k = blockDim.x * blockIdx.x + threadIdx.x;
+//    if (k < ktot)
+//    {
+//        cloud_mask_v[k] = 0;
+//        for (int j=0; j<jtot; ++j)
+//            for (int i=0; i<itot; ++i)
+//            {
+//                const int ijk = i + j*itot + k*jtot*itot;
+//                if (ssa_asy[ijk].asy > 0)
+//                {
+//                    cloud_mask_v[k] = 1;
+//                    return;
+//                }
+//            }
+//    }
+//    __syncthreads();
+//    if (k==0)
+//    {
+//        for (int i=0; i<ktot; ++i)
+//            if (cloud_mask_v[i]==1)
+//            {
+//                cloud_dims[0] = i*dz_grid;
+//                return;
+//            }
+//    }
+//    if (k==1)
+//    {
+//        for (int i=ktot; i>0; --i)
+//            if (cloud_mask_v[i]==1)
+//            {
+//                cloud_dims[1] = (i+1)*dz_grid;
+//                return;
+//            }
+//    }
+//}
+//
 __global__
 void ray_tracer_kernel(
         const Int photons_to_shoot,
