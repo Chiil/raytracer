@@ -168,7 +168,7 @@ void run_ray_tracer(const Int n_photons)
     //std::cout << "Duration cloud-mask computation: " << std::setprecision(5) << duration_m << " (s)" << std::endl;
 
     copy_from_gpu(cloud_dims.data(), cloud_dims_gpu, 2);
-    std::cout<<cloud_dims[0]<<" - "<<cloud_dims[1]<<std::endl;
+    // std::cout<<cloud_dims[0]<<" - "<<cloud_dims[1]<<std::endl;
 
     //// RUN THE RAY TRACER ////
     curandDirectionVectors32_t* qrng_vectors;
