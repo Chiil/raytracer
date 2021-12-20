@@ -282,7 +282,7 @@ void cloud_mask_kernel(
     {
         cloud_mask_v[k] = 0;
         for (int j=0; j<jtot; ++j)
-            for (int i=0; i<jtot; ++i)
+            for (int i=0; i<itot; ++i)
             {
                 const int ijk = i + j*itot + k*jtot*itot;
                 if (ssa_asy[ijk].asy > 0)
@@ -371,9 +371,9 @@ void ray_tracer_kernel(
             const int i = float_to_int(photon.position.x, kgrid_h, ngrid_h);
             const int j = float_to_int(photon.position.y, kgrid_h, ngrid_h);
             const int k = float_to_int(photon.position.z, kgrid_v, ngrid_v);
-            const Float sx = photon.direction.x > 0 ? ((i+1) * kgrid_h - photon.position.x)/photon.direction.x : (i*kgrid_h - photon.position.x)/photon.direction.x;
-            const Float sy = photon.direction.y > 0 ? ((j+1) * kgrid_h - photon.position.y)/photon.direction.y : (j*kgrid_h - photon.position.y)/photon.direction.y;
-            const Float sz = photon.direction.z > 0 ? ((k+1) * kgrid_v - photon.position.z)/photon.direction.z : (k*kgrid_v - photon.position.z)/photon.direction.z;
+            const Float sx = abs((photon.direction.x > 0) ? ((i+1) * kgrid_h - photon.position.x)/photon.direction.x : (i*kgrid_h - photon.position.x)/photon.direction.x);
+            const Float sy = abs((photon.direction.y > 0) ? ((j+1) * kgrid_h - photon.position.y)/photon.direction.y : (j*kgrid_h - photon.position.y)/photon.direction.y);
+            const Float sz = abs((photon.direction.z > 0) ? ((k+1) * kgrid_v - photon.position.z)/photon.direction.z : (k*kgrid_v - photon.position.z)/photon.direction.z);
             d_max = min(sx, min(sy, sz));
             const int ijk = i + j*ngrid_h + k*ngrid_h*ngrid_h;
             k_ext_null = k_null_grid[ijk];
