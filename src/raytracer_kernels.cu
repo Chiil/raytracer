@@ -27,6 +27,7 @@ constexpr int grid_size = 64;
 
 constexpr int ngrid_h = 90;
 constexpr int ngrid_v = 71;
+constexpr Float k_null_gas_min = Float(1.e-3);
 constexpr Float kgrid_h = Float(24000.)/ngrid_h;
 constexpr Float kgrid_v = Float(8520.)/ngrid_v;
 constexpr Float w_thres = 0.5;

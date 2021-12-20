@@ -80,7 +80,7 @@ void run_ray_tracer(const Int n_photons)
     const int fj = jtot/ngrid_h;
     const int fk = ktot/ngrid_v;
 
-    std::vector<Float> k_null_grid(ngrid_h*ngrid_h*ngrid_v, k_ext_null_gas);
+    std::vector<Float> k_null_grid(ngrid_h*ngrid_h*ngrid_v, max(k_null_gas_min, k_ext_null_gas));
     for (int k=0; k<ngrid_v; ++k)
         for (int j=0; j<ngrid_h; ++j)
             for (int i=0; i<ngrid_h; ++i)
