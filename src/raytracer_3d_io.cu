@@ -76,9 +76,9 @@ void run_ray_tracer(const Int n_photons)
                     k_ext_null_gas = k_ext_gas_tmp[ijk];
             }
 
-    const int fi = itot/ngrid_h;
-    const int fj = jtot/ngrid_h;
-    const int fk = ktot/ngrid_v;
+    const Float fi = (Float)itot/ngrid_h;
+    const Float fj = (Float)jtot/ngrid_h;
+    const Float fk = (Float)ktot/ngrid_v;
 
     std::vector<Float> k_null_grid(ngrid_h*ngrid_h*ngrid_v, max(k_null_gas_min, k_ext_null_gas));
     for (int k=0; k<ngrid_v; ++k)
@@ -86,18 +86,18 @@ void run_ray_tracer(const Int n_photons)
             for (int i=0; i<ngrid_h; ++i)
             {
                 const int i0 = i*fi;
-                const int i1 = (i+1)*fi;
+                const int i1 = std::floor((i+1)*fi);
                 const int j0 = j*fj;
-                const int j1 = (j+1)*fj;
+                const int j1 = std::floor((j+1)*fj);
                 const int k0 = k*fk;
-                const int k1 = (k+1)*fk;
+                const int k1 = std::floor((k+1)*fk);
+
                 for (int kk=k0; kk<k1; ++kk)
                     for (int jj=j0; jj<j1; ++jj)
                         for (int ii=i0; ii<i1; ++ii)
                         {
                             const int ijk_orig = ii + jj*itot + kk*itot*jtot; 
                             const int ijk_grid = i + j*ngrid_h + k*ngrid_h*ngrid_h; 
-                            //k_null_grid[ijk_grid] = k_ext_null;
                             if (k_ext_cloud_tmp[ijk_orig] > Float(0.))
                             {
                                 k_null_grid[ijk_grid] = k_ext_null;
